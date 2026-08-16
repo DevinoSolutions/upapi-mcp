@@ -1,0 +1,6 @@
+{
+  // `tsconfig.json` covers src AND __tests__ so `typecheck` sees the tests. The
+  // shipped build must not carry them, hence a separate emit config.
+  "extends": "./tsconfig.json",
+  "exclude": ["src/**/__tests__/**"]
+}

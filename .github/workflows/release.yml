@@ -1,0 +1,85 @@
+# Publish @upapi/mcp to npm.
+#
+# MANUAL ONLY, and `dry_run` defaults to TRUE. An npm release is irreversible
+# (unpublish is a 72-hour window, after which that exact version can never be
+# republished), so it must never be a side effect of merging. A dry run does
+# everything but the upload, which is how the tarball contents get proven before
+# anything is public.
+#
+# The version published is whatever is committed in package.json. Publishing a
+# version that already exists fails, which is the correct outcome: it means the
+# bump was forgotten.
+#
+# Trusted publishing (OIDC) is how this authenticates — there is no NPM_TOKEN.
+# npm matches the run's OIDC claims against the trusted publisher configured on
+# npmjs for @upapi/mcp, which must read EXACTLY:
+#
+#   Publisher   GitHub Actions
+#   Organization DevinoSolutions
+#   Repository   upapi-mcp
+#   Workflow     release.yml
+#   Environment  (blank)
+#
+# All four are case-sensitive. A mismatch does not say so: the token exchange
+# 404s "package not found" and npm falls back to token auth, dying ENEEDAUTH.
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Build and pack, but do not upload to npm'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  # Mints the short-lived OIDC token npm exchanges for a single-use publish
+  # credential. Without this the exchange never happens.
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish @upapi/mcp
+    # GitHub-HOSTED is mandatory: npm trusted publishing supports hosted runners
+    # only. On a self-hosted runner npm cannot exchange the OIDC token and falls
+    # back to token auth, failing ENEEDAUTH no matter how npmjs is configured.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      # `registry-url` is what writes the .npmrc line the publish step reads.
+      # Without it the upload authenticates as nobody. Node 22 because trusted
+      # publishing needs Node >= 22.14.0.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      # Node 22 ships npm 10.x, which has no OIDC support and would silently fall
+      # back to token auth. Pin forward and assert, so a too-old npm fails here
+      # with a readable message instead of as an opaque registry error later.
+      - name: npm >= 11.5.1 (required for OIDC)
+        run: |
+          npm install -g npm@latest
+          npm --version
+          # The env assignment must PRECEDE the command — written after it, V is a
+          # positional arg to node and process.env.V is undefined, which made this
+          # guard throw on every run regardless of npm version.
+          V="$(npm --version)" node -e 'const [a,b,c]=process.env.V.split(".").map(Number);if(a<11||(a===11&&(b<5||(b===5&&c<1))))
+            {console.error("::error::npm "+process.env.V+" is too old for trusted publishing (need >=11.5.1)");process.exit(1)}'
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - run: npm test
+
+      # --provenance publishes a signed attestation linking the tarball to this
+      # workflow run. It requires the repo to be public and package.json's
+      # repository.url to name THIS repository.
+      - name: Publish
+        run: npm publish --access public --provenance ${{ inputs.dry_run && '--dry-run' || '' }}

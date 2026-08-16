@@ -1,12 +1,74 @@
 {
   "name": "@upapi/mcp",
-  "version": "0.0.1",
-  "description": "Placeholder — the official upAPI MCP server. Coming soon.",
+  "version": "0.1.0",
+  "description": "Every public upAPI operation as an MCP tool — a local stdio server (upapi-mcp) and a handler for hosting MCP over streamable HTTP.",
+  "keywords": [
+    "upapi",
+    "mcp",
+    "model-context-protocol",
+    "ai",
+    "agent",
+    "tools",
+    "mastra"
+  ],
   "license": "MIT",
-  "homepage": "https://upapi.io",
-  "main": "index.js",
+  "homepage": "https://docs.upapi.io/docs/mcp",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/DevinoSolutions/upapi-mcp.git"
+  },
+  "bugs": {
+    "url": "https://app.upapi.io/support"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "upapi-mcp": "./dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./http": {
+      "types": "./dist/http.d.ts",
+      "default": "./dist/http.js"
+    },
+    "./mastra": {
+      "types": "./dist/mastra.d.ts",
+      "default": "./dist/mastra.js"
+    }
+  },
+  "sideEffects": [
+    "./dist/bin.js"
+  ],
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@mastra/core": "^1.57.0",
+    "@mastra/mcp": "^1.15.1",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@upapi/sdk": "^0.1.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.6"
   }
 }
