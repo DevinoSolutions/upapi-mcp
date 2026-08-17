@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.devinosolutions/upapi-mcp",
   "title": "upAPI",
-  "description": "Every public upAPI marketplace operation as an MCP tool: web scraping, screenshots, search, PDF/OCR/transcription, social and dev-tool APIs behind one metered key.",
+  "description": "All public upAPI operations as MCP tools: web scraping, search, screenshots, PDF, OCR and more.",
   "repository": {
     "url": "https://github.com/DevinoSolutions/upapi-mcp",
     "source": "github"
