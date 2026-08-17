@@ -1,0 +1,37 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.devinosolutions/upapi-mcp",
+  "title": "upAPI",
+  "description": "Every public upAPI marketplace operation as an MCP tool: web scraping, screenshots, search, PDF/OCR/transcription, social and dev-tool APIs behind one metered key.",
+  "repository": {
+    "url": "https://github.com/DevinoSolutions/upapi-mcp",
+    "source": "github"
+  },
+  "version": "0.1.1",
+  "websiteUrl": "https://docs.upapi.io",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://app.upapi.io/api/mcp"
+    }
+  ],
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@upapi/mcp",
+      "version": "0.1.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "UPAPI_API_KEY",
+          "description": "upAPI API key (create one at https://app.upapi.io/dashboard/api-keys)",
+          "isRequired": true,
+          "isSecret": true,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}

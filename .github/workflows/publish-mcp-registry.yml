@@ -1,0 +1,37 @@
+# Publish this server's metadata to the MCP Registry.
+#
+# MANUAL ONLY, and run it only AFTER release.yml has published the matching
+# @upapi/mcp version to npm — the registry validates that packages[].version
+# in server.json exists on npm and that the published package.json carries the
+# matching `mcpName`. Publishing the same server version twice fails, which is
+# the correct outcome.
+
+name: MCP Registry
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # GitHub OIDC is the registry credential: the run proves it belongs to this
+  # org, which grants the io.github.devinosolutions/* namespace. No secret.
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish to registry.modelcontextprotocol.io
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+          sudo mv mcp-publisher /usr/local/bin/
+
+      - name: Login (GitHub OIDC)
+        run: mcp-publisher login github-oidc
+
+      - name: Publish server.json
+        run: mcp-publisher publish
