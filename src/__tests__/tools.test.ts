@@ -4,6 +4,7 @@ import {
   createUpapiToolSpecs,
   isDirectoryListedOperation,
   DIRECTORY_EXCLUDED_CATEGORIES,
+  DIRECTORY_EXCLUDED_SLUGS,
   OPERATION_ANNOTATIONS,
   type Caller,
 } from '../tools.js';
@@ -297,14 +298,25 @@ describe('streamable HTTP transport', () => {
  * finding an Instagram scraper in a listing.
  */
 describe('the hosted surface is scoped to what a directory may advertise', () => {
-  it('withholds exactly the Social Media and Utility operations', () => {
+  it('withholds exactly the excluded categories plus the slug-level exclusions', () => {
     expect(WITHHELD.length).toBeGreaterThan(0);
     for (const op of WITHHELD) {
-      expect(DIRECTORY_EXCLUDED_CATEGORIES).toContain(op.category);
+      const byCategory = DIRECTORY_EXCLUDED_CATEGORIES.includes(op.category);
+      const bySlug = DIRECTORY_EXCLUDED_SLUGS.includes(op.slug);
+      expect(byCategory || bySlug, `${op.slug} withheld for no declared reason`).toBe(true);
     }
     for (const op of LISTED) {
       expect(DIRECTORY_EXCLUDED_CATEGORIES).not.toContain(op.category);
+      expect(DIRECTORY_EXCLUDED_SLUGS).not.toContain(op.slug);
     }
+  });
+
+  it('withholds the people-search operation the category filter cannot catch', () => {
+    // A professional-network people-search categorized `Search` must not ride
+    // onto a directory listing (the listing pack's §5 blocker). The listed
+    // COUNT is pinned once, in the counts test below.
+    expect(DIRECTORY_EXCLUDED_SLUGS).toContain('linkedin-profile-search.post');
+    expect(LISTED.map((op) => op.slug)).not.toContain('linkedin-profile-search.post');
   });
 
   it('serves the listed operations and no others over tools/list', async () => {
@@ -366,8 +378,10 @@ describe('the hosted surface is scoped to what a directory may advertise', () =>
     // quoting them needs the same edit — hence a hard assertion rather than a
     // derived one. 2026-08-13: 26→33 listed (the 7 new Tools ops: screenshot,
     // html-to-pdf, fetch-markdown, pdf-extract-text, image-ocr and the
-    // audio-transcribe pair); withheld unchanged at 24.
-    expect(LISTED).toHaveLength(33);
-    expect(WITHHELD).toHaveLength(24);
+    // audio-transcribe pair); withheld unchanged at 24. 2026-08-17: 33→32
+    // (linkedin-profile-search.post slug-excluded — the listing pack's §5
+    // blocker; withheld 24→25).
+    expect(LISTED).toHaveLength(32);
+    expect(WITHHELD).toHaveLength(25);
   });
 });

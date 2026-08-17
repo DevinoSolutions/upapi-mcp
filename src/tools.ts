@@ -56,9 +56,22 @@ export type ToolFilter = (op: OperationMeta) => boolean;
  */
 export const DIRECTORY_EXCLUDED_CATEGORIES: readonly string[] = ['Social Media', 'Utility'];
 
+/**
+ * Slug-level companions to the category list, for operations whose catalog
+ * category does not reflect why a directory must not advertise them.
+ * `linkedin-profile-search.post` is a keyed-session people-search over a
+ * professional network — exactly the personal-data bargain the Social Media
+ * exclusion exists to refuse — but it is categorized `Search`, so the category
+ * filter cannot catch it. Recategorizing it in the worker manifest would also
+ * work, but that changes every catalog surface (marketplace grouping, landing
+ * counts, seeded mirror) for what is a directory-only concern.
+ */
+export const DIRECTORY_EXCLUDED_SLUGS: readonly string[] = ['linkedin-profile-search.post'];
+
 /** True when an operation belongs on the hosted, directory-listed surface. */
 export const isDirectoryListedOperation: ToolFilter = (op) =>
-  !DIRECTORY_EXCLUDED_CATEGORIES.includes(op.category);
+  !DIRECTORY_EXCLUDED_CATEGORIES.includes(op.category) &&
+  !DIRECTORY_EXCLUDED_SLUGS.includes(op.slug);
 
 export type CreateToolsOptions = {
   caller: Caller;
