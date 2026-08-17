@@ -13,7 +13,7 @@
     "mastra"
   ],
   "license": "MIT",
-  "homepage": "https://docs.upapi.io/docs/mcp",
+  "homepage": "https://upapi.io/docs/mcp",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/DevinoSolutions/upapi-mcp.git"

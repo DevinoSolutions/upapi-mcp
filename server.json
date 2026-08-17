@@ -8,7 +8,7 @@
     "source": "github"
   },
   "version": "0.1.2",
-  "websiteUrl": "https://docs.upapi.io",
+  "websiteUrl": "https://upapi.io/docs",
   "remotes": [
     {
       "type": "streamable-http",
