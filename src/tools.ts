@@ -212,7 +212,7 @@ const GPU_JOB_SUBMIT: McpToolAnnotations = {
  * `packages/mcp/src/__tests__/tools.test.ts` pins the same invariant at runtime.
  */
 export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnotations>> = {
-  // ── Third-party reads (53) ────────────────────────────────────────────────
+  // ── Third-party reads (55) ────────────────────────────────────────────────
   'archive-wayback.get': THIRD_PARTY_READ,
   // Renders/reads a caller-named page or document and writes nothing anywhere.
   // The three render ops (screenshot, html-to-pdf, fetch-markdown) hold a real
@@ -240,6 +240,12 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
   'github-trending.get': THIRD_PARTY_READ,
   'github-user.get': THIRD_PARTY_READ,
   'google-autocomplete.post': THIRD_PARTY_READ,
+  // The two Maps operations read Google's own Maps endpoints and write nowhere.
+  // Idempotent in the sense the hint means — a repeat call is safe and free of
+  // side effects — even though Google's ranking makes the RESULT of a search
+  // vary between calls, which is true of every search tool in this table.
+  'google-maps-place.get': THIRD_PARTY_READ,
+  'google-maps-search.post': THIRD_PARTY_READ,
   'hackernews-search.get': THIRD_PARTY_READ,
   'instagram-check-account-health.get': THIRD_PARTY_READ,
   'instagram-discover-location.post': THIRD_PARTY_READ,
