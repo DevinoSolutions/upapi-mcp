@@ -1,7 +1,7 @@
 {
   "name": "@upapi/mcp",
-  "version": "0.1.1",
-  "mcpName": "io.github.devinosolutions/upapi-mcp",
+  "version": "0.1.2",
+  "mcpName": "io.github.DevinoSolutions/upapi-mcp",
   "description": "Every public upAPI operation as an MCP tool — a local stdio server (upapi-mcp) and a handler for hosting MCP over streamable HTTP.",
   "keywords": [
     "upapi",

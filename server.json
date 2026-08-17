@@ -1,13 +1,13 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.devinosolutions/upapi-mcp",
+  "name": "io.github.DevinoSolutions/upapi-mcp",
   "title": "upAPI",
   "description": "All public upAPI operations as MCP tools: web scraping, search, screenshots, PDF, OCR and more.",
   "repository": {
     "url": "https://github.com/DevinoSolutions/upapi-mcp",
     "source": "github"
   },
-  "version": "0.1.1",
+  "version": "0.1.2",
   "websiteUrl": "https://docs.upapi.io",
   "remotes": [
     {
@@ -19,7 +19,7 @@
     {
       "registryType": "npm",
       "identifier": "@upapi/mcp",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "transport": {
         "type": "stdio"
       },
