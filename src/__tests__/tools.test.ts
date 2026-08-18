@@ -382,8 +382,9 @@ describe('the hosted surface is scoped to what a directory may advertise', () =>
     // (linkedin-profile-search.post slug-excluded — the listing pack's §5
     // blocker; withheld 24→25). 2026-08-17: 32→34 (google-maps-search.post and
     // google-maps-place.get — a new Maps category, both directory-listable;
-    // withheld unchanged at 25).
-    expect(LISTED).toHaveLength(34);
+    // withheld unchanged at 25). 2026-08-18: 34→35 (google-maps-reviews.get
+    // completes the Maps trio; withheld unchanged at 25).
+    expect(LISTED).toHaveLength(35);
     expect(WITHHELD).toHaveLength(25);
   });
 });

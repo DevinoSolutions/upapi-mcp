@@ -240,11 +240,14 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
   'github-trending.get': THIRD_PARTY_READ,
   'github-user.get': THIRD_PARTY_READ,
   'google-autocomplete.post': THIRD_PARTY_READ,
-  // The two Maps operations read Google's own Maps endpoints and write nowhere.
+  // The three Maps operations read Google's own Maps endpoints and write nowhere.
   // Idempotent in the sense the hint means — a repeat call is safe and free of
   // side effects — even though Google's ranking makes the RESULT of a search
-  // vary between calls, which is true of every search tool in this table.
+  // vary between calls, which is true of every search tool in this table. The
+  // reviews operation is the same story with a moving corpus underneath: new
+  // reviews arrive, so a repeat call is safe but need not return the same rows.
   'google-maps-place.get': THIRD_PARTY_READ,
+  'google-maps-reviews.get': THIRD_PARTY_READ,
   'google-maps-search.post': THIRD_PARTY_READ,
   'hackernews-search.get': THIRD_PARTY_READ,
   'instagram-check-account-health.get': THIRD_PARTY_READ,
