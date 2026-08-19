@@ -19,10 +19,12 @@ import type { McpToolAnnotations, ToolCallResult, UpapiToolSpec } from './tools.
  * facade that the per-op table would not have exposed.
  */
 
-/** Discovery: search the operations THIS connection is allowed to see. */
-export const SEARCH_OPS_TOOL_NAME = 'search_ops';
-/** Execution: run one operation by slug. */
-export const CALL_OP_TOOL_NAME = 'call_op';
+// Declared in a leaf module so a browser bundle can read the names without
+// reaching this file's import graph (the MCP SDK, ajv, the transport). Re-
+// exported here so every existing importer keeps working and there is still one
+// definition of each name.
+export { CALL_OP_TOOL_NAME, SEARCH_OPS_TOOL_NAME } from './tool-names.js';
+import { CALL_OP_TOOL_NAME, SEARCH_OPS_TOOL_NAME } from './tool-names.js';
 
 /**
  * The operations that stay on the tool table as full tools in compact mode.

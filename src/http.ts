@@ -83,6 +83,48 @@ export type McpHttpOptions = CreateToolsOptions & {
 export type { Caller } from './tools.js';
 
 /**
+ * The tool table's own building blocks, re-exported here for the same reason
+ * `Caller` is: a host that must assemble its OWN table — the in-app AI copilot
+ * builds AI SDK tools rather than MCP tools — needs the specs and the facade,
+ * and reaching for them through the barrel would put @mastra/core back into a
+ * traced production bundle. Everything below comes from `./tools.js`,
+ * `./facade.js`, and `./errors.js`, none of which import Mastra; adding a
+ * re-export from `./mastra.js` here would silently undo that.
+ *
+ * There is exactly ONE tool registry in this product and this is how a second
+ * transport consumes it. A host that copies the catalog into a table of its own
+ * has forked the registry, and the two will disagree the first time an operation
+ * is added.
+ */
+export {
+  createUpapiToolSpecs,
+  isDirectoryListedOperation,
+  DIRECTORY_EXCLUDED_CATEGORIES,
+  DIRECTORY_EXCLUDED_SLUGS,
+  OPERATION_ANNOTATIONS,
+  type CreateToolsOptions,
+  type McpToolAnnotations,
+  type ToolCallResult,
+  type ToolContent,
+  type ToolFilter,
+  type UpapiToolSpec,
+} from './tools.js';
+
+export {
+  createFacadeEntries,
+  toolForbidden,
+  toolNotFound,
+  ALWAYS_ON_SLUGS,
+  CALL_OP_TOOL_NAME,
+  SEARCH_OPS_TOOL_NAME,
+  EXECUTE_FORBIDDEN_MESSAGE,
+  SEARCH_FORBIDDEN_MESSAGE,
+  type McpToolEntry,
+} from './facade.js';
+
+export { formatToolFailure, toToolFailure, type ToolFailure } from './errors.js';
+
+/**
  * The mode a request asks for: `?tools=full`, else compact.
  *
  * A query parameter rather than a header or a separate route because an MCP

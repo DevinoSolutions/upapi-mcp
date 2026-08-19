@@ -39,6 +39,10 @@
       "types": "./dist/http.d.ts",
       "default": "./dist/http.js"
     },
+    "./tool-names": {
+      "types": "./dist/tool-names.d.ts",
+      "default": "./dist/tool-names.js"
+    },
     "./mastra": {
       "types": "./dist/mastra.d.ts",
       "default": "./dist/mastra.js"
