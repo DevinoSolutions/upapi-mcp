@@ -201,6 +201,23 @@ const GPU_JOB_SUBMIT: McpToolAnnotations = {
 };
 
 /**
+ * `text-analyze.post` — the Rust worker's pure-compute endpoint: counts and a SHA-256
+ * over a caller-supplied string.
+ *
+ * The ONLY published operation with `openWorldHint: false`. Every other tool here
+ * reaches a third party whose answer can change between calls; this one touches no
+ * network at all, so the same input always yields the same output and a host is free to
+ * run it without the "this talks to the internet" caution. Read-only and idempotent for
+ * the same reason: there is nothing outside the process for it to change.
+ */
+const LOCAL_COMPUTE: McpToolAnnotations = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+};
+
+/**
  * Every published operation's annotations, declared explicitly.
  *
  * Keyed by `OperationSlug` — the literal union generated from the catalog — so
@@ -212,7 +229,7 @@ const GPU_JOB_SUBMIT: McpToolAnnotations = {
  * `packages/mcp/src/__tests__/tools.test.ts` pins the same invariant at runtime.
  */
 export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnotations>> = {
-  // ── Third-party reads (55) ────────────────────────────────────────────────
+  // ── Third-party reads (56) ────────────────────────────────────────────────
   'archive-wayback.get': THIRD_PARTY_READ,
   // Renders/reads a caller-named page or document and writes nothing anywhere.
   // The three render ops (screenshot, html-to-pdf, fetch-markdown) hold a real
@@ -296,6 +313,9 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
 
   // ── GPU job submission (1) ────────────────────────────────────────────────
   'audio-transcribe.post': GPU_JOB_SUBMIT,
+
+  // ── Local pure compute, no network (1) ────────────────────────────────────
+  'text-analyze.post': LOCAL_COMPUTE,
 };
 
 export type UpapiToolSpec = {

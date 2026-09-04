@@ -40,6 +40,21 @@ async function rpcResult(request: Request, caller = noopCaller): Promise<Record<
   return parsed.result ?? {};
 }
 
+/**
+ * Operations that reach NOTHING outside the process, so `openWorldHint` is false.
+ *
+ * Exactly one today: `text-analyze.post`, the Rust worker's pure-compute endpoint.
+ * A list rather than a special case in each assertion, so adding a second one is a
+ * single reviewed edit — and so the two assertions below can never disagree about
+ * which operations are exempt.
+ */
+const CLOSED_WORLD_SLUGS: readonly string[] = ['text-analyze.post'];
+
+/** The same set as MCP tool names (`operationId`: slug with `.`/`-` → `_`). */
+const CLOSED_WORLD_TOOL_NAMES: readonly string[] = OPERATIONS.filter((op) =>
+  CLOSED_WORLD_SLUGS.includes(op.slug),
+).map((op) => op.operationId);
+
 describe('the tool table covers the catalog', () => {
   it('exposes exactly one tool per public operation', () => {
     const specs = createUpapiToolSpecs({ caller: noopCaller });
@@ -109,13 +124,18 @@ describe('every tool declares how it behaves', () => {
     }
   });
 
-  it('marks every tool openWorldHint — upAPI IS the third-party call surface', () => {
-    // The marketplace requirement, pinned: every published operation exists to
-    // reach a system upAPI does not own. If an operation is ever added that only
-    // reads upAPI's own workspace or key state, this assertion is the place to
-    // carve it out deliberately — not `OPERATION_ANNOTATIONS` quietly.
+  it('marks every tool openWorldHint, except the one that touches no network', () => {
+    // The marketplace requirement, pinned: a published operation exists to reach a
+    // system upAPI does not own. The carve-out this comment always invited is now
+    // taken, ONCE and by name: `text-analyze.post` is pure compute (counts + a
+    // SHA-256 over a caller-supplied string, in the Rust worker) and reaches
+    // nothing at all, so claiming openWorld would tell a host to be careful about
+    // a call that cannot leave the process. Naming it here rather than letting
+    // `OPERATION_ANNOTATIONS` say it quietly is the whole point of the assertion.
     for (const spec of createUpapiToolSpecs({ caller: noopCaller })) {
-      expect(spec.annotations.openWorldHint, spec.slug).toBe(true);
+      expect(spec.annotations.openWorldHint, spec.slug).toBe(
+        !CLOSED_WORLD_SLUGS.includes(spec.slug),
+      );
     }
   });
 
@@ -226,7 +246,9 @@ describe('streamable HTTP transport', () => {
         idempotentHint: expect.any(Boolean),
         openWorldHint: expect.any(Boolean),
       });
-      expect(tool.annotations?.['openWorldHint'], tool.name).toBe(true);
+      expect(tool.annotations?.['openWorldHint'], tool.name).toBe(
+        !CLOSED_WORLD_TOOL_NAMES.includes(tool.name),
+      );
     }
   });
 
@@ -393,8 +415,11 @@ describe('the hosted surface is scoped to what a directory may advertise', () =>
     // conservative side of that call and costs nothing, since the stdio surface
     // still carries every operation. Recategorizing is a catalog-wide product
     // decision (marketplace grouping, landing counts, seeded mirror), not a
-    // directory one.
-    expect(LISTED).toHaveLength(35);
+    // directory one. 2026-09-03: listed 35→36 (text-analyze.post — the Rust op,
+    // public and live all along but absent from the generated catalog until the
+    // exporter learned to read the Rust worker; `Developer Tools`, so it lands on
+    // the listed side; withheld unchanged at 27).
+    expect(LISTED).toHaveLength(36);
     expect(WITHHELD).toHaveLength(27);
   });
 });
