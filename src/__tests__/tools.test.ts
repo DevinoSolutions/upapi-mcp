@@ -383,8 +383,18 @@ describe('the hosted surface is scoped to what a directory may advertise', () =>
     // blocker; withheld 24→25). 2026-08-17: 32→34 (google-maps-search.post and
     // google-maps-place.get — a new Maps category, both directory-listable;
     // withheld unchanged at 25). 2026-08-18: 34→35 (google-maps-reviews.get
-    // completes the Maps trio; withheld unchanged at 25).
+    // completes the Maps trio; withheld unchanged at 25). 2026-09-02: listed
+    // unchanged at 35, withheld 25→27 (linkedin-jobs-search + linkedin-jobs-detail,
+    // D22). They are categorized `Social Media`, so the CATEGORY filter excluded
+    // them the moment they landed with nobody editing this file — which is the
+    // behaviour the exclusion list's own comment promises. The bargain it names
+    // (third parties' personal data) fits them loosely at best: a job posting is a
+    // company's public advertisement. Withholding them from the DIRECTORY is the
+    // conservative side of that call and costs nothing, since the stdio surface
+    // still carries every operation. Recategorizing is a catalog-wide product
+    // decision (marketplace grouping, landing counts, seeded mirror), not a
+    // directory one.
     expect(LISTED).toHaveLength(35);
-    expect(WITHHELD).toHaveLength(25);
+    expect(WITHHELD).toHaveLength(27);
   });
 });
