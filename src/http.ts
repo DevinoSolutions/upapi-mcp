@@ -14,8 +14,8 @@ import {
   EXECUTE_FORBIDDEN_MESSAGE,
   SEARCH_FORBIDDEN_MESSAGE,
   SEARCH_OPS_TOOL_NAME,
-  type McpToolEntry,
 } from './facade.js';
+import { parseToolMode, selectListedTools, type McpToolMode } from './table.js';
 import { SERVER_NAME, SERVER_VERSION } from './meta.js';
 
 /**
@@ -34,11 +34,14 @@ import { SERVER_NAME, SERVER_VERSION } from './meta.js';
  * their access token on EVERY request, so a tool can never execute against a
  * session that outlived the token that opened it.
  *
- * TWO TOOL TABLES, ONE ACCESS DECISION. `?tools=full` serves one tool per
- * operation; the default serves the compact facade (`search_ops` + `call_op` +
- * a few always-on operations) so a connection does not re-send tens of
- * kilobytes of JSON Schema on every turn. Both are built from the SAME filtered
- * `specs`, so the mode changes what is ADVERTISED and never what is reachable.
+ * THREE TOOL TABLES, ONE ACCESS DECISION. `?tools=full` serves one tool per
+ * operation; `?tools=directory` serves the curated, named, read/write-separated
+ * listing an AI marketplace reviews (see `directory.ts`); the default serves the
+ * compact facade (`search_ops` + `call_op` + a few always-on operations) so a
+ * connection does not re-send tens of kilobytes of JSON Schema on every turn.
+ * All three are built from the SAME filtered `specs` by the SAME
+ * `selectListedTools`, so the mode changes what is ADVERTISED and never what is
+ * reachable.
  *
  * This module imports NOTHING from Mastra, and must not start: it is reachable
  * as the `@upapi/mcp/http` subpath precisely so a host that file-traces its
@@ -46,19 +49,6 @@ import { SERVER_NAME, SERVER_VERSION } from './meta.js';
  * for a constant or a type in `./mastra.js` from here would put @mastra/core and
  * @mastra/mcp back in a production image that never runs a Mastra agent.
  */
-
-/**
- * How many tools `tools/list` advertises.
- *
- *  - `compact` (default) — `search_ops` + `call_op` + the always-on operations.
- *    A few kilobytes, flat as the catalog grows, and the shape every hosted
- *    client should use.
- *  - `full` — one tool per operation, the original table. Kept because an agent
- *    with a large context and a fixed workflow benefits from schemas being
- *    present without a discovery call, and because it is what existing
- *    connections were configured against.
- */
-export type McpToolMode = 'compact' | 'full';
 
 export type McpHttpOptions = CreateToolsOptions & {
   name?: string | undefined;
@@ -122,10 +112,23 @@ export {
   type McpToolEntry,
 } from './facade.js';
 
+export {
+  createDirectoryEntries,
+  DIRECTORY_FLAGSHIP_SLUGS,
+  type DirectoryEntries,
+} from './directory.js';
+
+export {
+  parseToolMode,
+  selectListedTools,
+  type McpToolMode,
+  type SelectListedToolsOptions,
+} from './table.js';
+
 export { formatToolFailure, toToolFailure, type ToolFailure } from './errors.js';
 
 /**
- * The mode a request asks for: `?tools=full`, else compact.
+ * The mode a request asks for: `?tools=full`, `?tools=directory`, else compact.
  *
  * A query parameter rather than a header or a separate route because an MCP
  * client is configured with ONE URL and re-sends it verbatim; anything that
@@ -135,7 +138,7 @@ export { formatToolFailure, toToolFailure, type ToolFailure } from './errors.js'
  */
 export function resolveToolMode(request: Request): McpToolMode {
   try {
-    return new URL(request.url).searchParams.get('tools') === 'full' ? 'full' : 'compact';
+    return parseToolMode(new URL(request.url).searchParams.get('tools')) ?? 'compact';
   } catch {
     return 'compact';
   }
@@ -166,26 +169,11 @@ export async function handleUpapiMcpRequest(
   const canExecute = options.canExecute ?? true;
   const canSearch = options.canSearch ?? true;
   const mode = options.mode ?? resolveToolMode(request);
-  const { search, call, alwaysOn } = createFacadeEntries(specs);
+  const { search, call } = createFacadeEntries(specs);
 
-  // What tools/list ADVERTISES. Dispatch below is deliberately wider: in compact
-  // mode an operation that is served but not listed is still callable by name,
-  // because the compact table is a context-budget decision, not an access
-  // decision — the access decision is `specs`, and it is the same in both modes.
-  const listed: McpToolEntry[] = [];
-  if (!canExecute) {
-    // Nothing executable may be advertised. Whichever mode was asked for, the
-    // search facade is all that is left — listing per-op tools this caller
-    // cannot run would cost a tool call to discover the refusal.
-    if (canSearch) listed.push(search);
-  } else if (mode === 'full') {
-    // Exactly the per-op table, with no facade: full mode's premise is that
-    // every schema is already present, so a discovery tool is dead weight.
-    listed.push(...specs);
-  } else {
-    if (canSearch) listed.push(search);
-    listed.push(call, ...alwaysOn);
-  }
+  // What tools/list ADVERTISES. Dispatch below is deliberately wider — see
+  // `selectListedTools`, which owns this decision for both transports.
+  const listed = selectListedTools(specs, { mode, canExecute, canSearch });
 
   const server = new Server(
     { name: options.name ?? SERVER_NAME, version: options.version ?? SERVER_VERSION },

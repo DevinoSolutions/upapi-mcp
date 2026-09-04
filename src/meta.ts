@@ -9,4 +9,13 @@
  */
 
 export const SERVER_NAME = 'upAPI';
-export const SERVER_VERSION = '0.1.0';
+
+/**
+ * The version an MCP client sees in `initialize`.
+ *
+ * Must equal this package's `version`. It cannot BE that value — a JSON import
+ * would need an import attribute and would land in every consumer's bundle — so
+ * `registry-metadata.test.ts` reads package.json and fails on a drift — which is how
+ * this stayed at `0.1.0` through three releases before anyone noticed.
+ */
+export const SERVER_VERSION = '0.2.0';

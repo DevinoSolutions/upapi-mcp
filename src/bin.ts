@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createGatewayCaller } from './caller.js';
-import { createUpapiMcpServer } from './mastra.js';
+import { resolveStdioToolMode, startUpapiStdioServer } from './stdio.js';
 
 /**
  * `upapi-mcp` — a local stdio MCP server for upAPI.
@@ -10,6 +10,10 @@ import { createUpapiMcpServer } from './mastra.js';
  *
  *   UPAPI_API_KEY   (required)  an `upapi_` key from app.upapi.io → API Keys
  *   UPAPI_BASE_URL  (optional)  gateway origin; defaults to https://api.upapi.io
+ *   UPAPI_TOOL_MODE (optional)  `full` (default, one tool per operation),
+ *                               `directory` (curated named tools, reads and
+ *                               writes separated) or `compact`
+ *                               (`search_ops` + `call_op`).
  *
  * The key is NOT validated here — only checked for presence, so a missing one
  * fails immediately with a readable message instead of surfacing later as an
@@ -33,11 +37,10 @@ async function main(): Promise<void> {
   }
 
   const baseUrl = process.env['UPAPI_BASE_URL'];
-  const server = createUpapiMcpServer({
+  await startUpapiStdioServer({
     caller: createGatewayCaller({ apiKey, ...(baseUrl ? { baseUrl } : {}) }),
+    mode: resolveStdioToolMode(),
   });
-
-  await server.startStdio();
 }
 
 main().catch((err: unknown) => {

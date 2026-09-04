@@ -52,10 +52,11 @@ Claude Desktop (`claude_desktop_config.json`), Cursor, and Windsurf take the sam
 }
 ```
 
-| Variable         |          |                                                    |
-| ---------------- | -------- | -------------------------------------------------- |
-| `UPAPI_API_KEY`  | required | an `upapi_` key                                    |
-| `UPAPI_BASE_URL` | optional | gateway origin, defaults to `https://api.upapi.io` |
+| Variable          |          |                                                        |
+| ----------------- | -------- | ------------------------------------------------------ |
+| `UPAPI_API_KEY`   | required | an `upapi_` key                                        |
+| `UPAPI_BASE_URL`  | optional | gateway origin, defaults to `https://api.upapi.io`     |
+| `UPAPI_TOOL_MODE` | optional | `full` (default), `directory` or `compact` — see Tools |
 
 The key is never validated locally — only checked for presence, so a missing one fails
 immediately with a readable message instead of surfacing later as an unexplained 401 inside a
@@ -78,14 +79,24 @@ kilobytes of JSON Schema per turn and a table large enough to measurably degrade
 and `wikipedia-article.get` stay on the table as full tools so the common case needs no discovery
 round-trip.
 
-Want every operation as its own tool instead? Add `?tools=full`:
+There are two other tables. `?tools=full` gives every operation its own tool:
 
 ```bash
 claude mcp add --transport http upapi 'https://app.upapi.io/api/mcp?tools=full'
 ```
 
-Both modes reach exactly the same operations — the mode changes what is advertised, never what is
-allowed. Operations are named after their slug with `.` and `-` replaced by `_`
+`?tools=directory` gives a curated set of **named** tools for the flagship operations — the Maps
+trio, web search, page-to-Markdown, screenshot, HTML-to-PDF, PDF text, OCR, transcription, GitHub
+repo/user, npm package, IP geolocation, Wikipedia, currency — with read tools and write tools
+listed separately and no `call_op`. That is the shape AI-directory review criteria ask for (a
+catch-all dispatcher with a target parameter is a rejection), and it is what the Claude Desktop
+Extension ships with. The local stdio server takes the same three names in `UPAPI_TOOL_MODE`,
+defaulting to `full`.
+
+All three modes reach exactly the same operations — the mode changes what is advertised, never
+what is allowed. Every tool in every mode carries `readOnlyHint`, `destructiveHint`,
+`idempotentHint` and `openWorldHint`, derived from what the worker does rather than from the
+slug's verb suffix. Operations are named after their slug with `.` and `-` replaced by `_`
 (`web-search.post` → `web_search_post`), and each advertises the operation's real JSON Schema
 (formats, bounds, defaults, nullability), because that schema is generated from the worker's own
 model and passed through untouched.
@@ -108,11 +119,15 @@ unexpected null would turn a successful call into a protocol error.
 
 ## Use it from Mastra
 
-The tools work in a Mastra agent directly, without an MCP transport in between:
+The tools work in a Mastra agent directly, without an MCP transport in between. `@mastra/core` and
+`@mastra/mcp` are **optional peer dependencies** — install them yourself, and import the bindings
+from the `/mastra` subpath. Nothing else in this package touches Mastra, which is what keeps a
+plain `npm i @upapi/mcp` (and the desktop-extension bundle built from it) small.
 
 ```ts
 import { Agent } from '@mastra/core/agent';
-import { createGatewayCaller, createUpapiTools } from '@upapi/mcp';
+import { createGatewayCaller } from '@upapi/mcp';
+import { createUpapiTools } from '@upapi/mcp/mastra';
 
 const agent = new Agent({
   name: 'researcher',
@@ -139,14 +154,14 @@ createUpapiTools({
 over different transports:
 
 ```ts
-import { createUpapiMcpServer, type Caller } from '@upapi/mcp';
+import { startUpapiStdioServer, type Caller } from '@upapi/mcp';
 
 const caller: Caller = async (slug, input) => {
   // resolve with the operation's output, or throw
   // { code, message, status?, retryAfterSeconds? }
 };
 
-await createUpapiMcpServer({ caller }).startStdio();
+await startUpapiStdioServer({ caller, mode: 'directory' });
 ```
 
 For a web-standard `Request`/`Response` server (Next.js route, Worker, Hono), import the
@@ -157,7 +172,7 @@ import { handleUpapiMcpRequest, type Caller } from '@upapi/mcp/http';
 
 await handleUpapiMcpRequest(request, {
   caller,
-  // mode defaults to the request's own `?tools=` parameter (compact unless `full`)
+  // mode defaults to the request's own `?tools=` parameter (compact unless `full`/`directory`)
   canExecute: true, // false hides every executable tool and refuses a call to one
   canSearch: true, // false hides `search_ops`
 });
@@ -167,10 +182,10 @@ await handleUpapiMcpRequest(request, {
 upAPI maps them to the access token's `ops:execute` and `ops:read` scopes. Both default to
 true, so a host without a scope model is unaffected.
 
-Prefer that subpath over the package root in a bundled or file-traced deployment. The root
-entry re-exports the Mastra bindings, so importing the handler from it pulls `@mastra/core`
-and `@mastra/mcp` into a build that never runs a Mastra agent; `@upapi/mcp/http` reaches
-only the MCP SDK.
+Prefer that subpath over the package root in a bundled or file-traced deployment: it reaches only
+the MCP SDK, while the root entry also pulls the stdio server in. Neither reaches Mastra — the
+bindings live behind `@upapi/mcp/mastra` precisely so that a build which never runs a Mastra agent
+never sees `@mastra/core`.
 
 ## Related
 
