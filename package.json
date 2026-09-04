@@ -68,7 +68,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "@upapi/sdk": "^0.1.1",
+    "@upapi/sdk": "^0.2.0",
     "zod": "^3.25.0"
   },
   "peerDependencies": {
