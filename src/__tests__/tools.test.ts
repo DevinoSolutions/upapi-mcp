@@ -152,6 +152,13 @@ describe('every tool declares how it behaves', () => {
       'email-read-verification-code.post',
       'email-read-verification-link.post',
       'instagram-check-account.post',
+      // Opening a Wellfound recruiter thread. It is the fourth REVIEWED
+      // non-read-only op and the only one here whose side effect is unmeasured
+      // rather than known: a conversation carries a server-side `unread` flag,
+      // this is the query the UI fires when a human opens a thread, and settling
+      // whether that clears it needs a live account nobody logged into for the
+      // port. See INBOX_THREAD_OPEN in tools.ts for how to settle it.
+      'wellfound-conversation-detail.post',
     ]);
   });
 
@@ -341,6 +348,17 @@ describe('the hosted surface is scoped to what a directory may advertise', () =>
     expect(LISTED.map((op) => op.slug)).not.toContain('linkedin-profile-search.post');
   });
 
+  it('withholds the email fan-out the category filter cannot catch', () => {
+    // `github-user-emails.get` reads a person's email addresses off their public
+    // commits. It is categorized `Developer Tools`, so nothing in the CATEGORY
+    // list withholds it — the same gap `linkedin-profile-search.post` sits in.
+    // Pinned by NAME rather than by the count below, so a future op that happens
+    // to restore the old total cannot quietly put this one back on the directory.
+    expect(DIRECTORY_EXCLUDED_SLUGS).toContain('github-user-emails.get');
+    expect(LISTED.map((op) => op.slug)).not.toContain('github-user-emails.get');
+    expect(WITHHELD.map((op) => op.slug)).toContain('github-user-emails.get');
+  });
+
   it('serves the listed operations and no others over tools/list', async () => {
     const result = await rpcResult(rpc({ jsonrpc: '2.0', id: 10, method: 'tools/list' }));
     const names = (result['tools'] as { name: string }[]).map((t) => t.name).sort();
@@ -418,8 +436,84 @@ describe('the hosted surface is scoped to what a directory may advertise', () =>
     // directory one. 2026-09-03: listed 35→36 (text-analyze.post — the Rust op,
     // public and live all along but absent from the generated catalog until the
     // exporter learned to read the Rust worker; `Developer Tools`, so it lands on
-    // the listed side; withheld unchanged at 27).
-    expect(LISTED).toHaveLength(36);
-    expect(WITHHELD).toHaveLength(27);
+    // the listed side; withheld unchanged at 27). 2026-09-07: listed unchanged at
+    // 36, withheld 27→28 (instagram-get-user-by-id.post, the one PUBLIC operation
+    // of the Instagram mobile-API port — the other eleven take a session blob and
+    // ship `publish_targets: []`, so they never enter the generated catalog and
+    // never reach this table at all). `Social Media`, so the CATEGORY filter
+    // withheld it the moment it landed, again with nobody editing this file.
+    // Also 2026-09-07, on top of that: withheld 28→30 (upwork-jobs-search +
+    // upwork-jobs-detail, the keyless Upwork visitor pair). Same shape as
+    // the LinkedIn jobs pair above and for the same reason: they are categorized
+    // `Social Media`, so the CATEGORY filter withheld them the moment they landed
+    // without anyone editing the exclusion list. A job posting is a company's
+    // public advertisement rather than a third party's personal data, so the
+    // bargain fits them loosely — withholding is the conservative side and costs
+    // nothing, since the stdio surface still carries both. Recategorizing the
+    // jobs operations is one catalog-wide product decision covering LinkedIn and
+    // Upwork together, not a directory one, and not this PR's to take.
+    // Also 2026-09-07, on top of that: withheld 30→33 (tiktok-oembed.get,
+    // tiktok-get-video-embed.get and tiktok-get-comment-replies.get, the three PUBLIC
+    // reads of the TikTok port — the other three ops it adds take a session and ship
+    // `publish_targets: []`, so they never enter the generated catalog). Same shape as
+    // the two entries above: `Social Media`, so the CATEGORY filter withheld them the
+    // moment they landed with nobody editing the exclusion list. All three are anonymous
+    // public reads that spend no session, so the personal-data bargain fits them loosely,
+    // but withholding is the conservative side and costs nothing — the stdio surface
+    // still carries every operation.
+    // Also 2026-09-07, on top of that: withheld 33→45 (the twelve public
+    // Wellfound operations). They were first written with a category of their own,
+    // `jobs`, which would have advertised every one of them — including two that
+    // read a private recruiter inbox — to anyone who clicks connect, while
+    // `linkedin-jobs-search`/`-detail` sat withheld for being the same kind of
+    // operation. The fix was the category, not a slug carve-out: they are
+    // `Social Media` now, matching the LinkedIn pair exactly, so the CATEGORY
+    // filter withheld all twelve with no edit here beyond this number. A new
+    // lowercase category invented by one port is a catalog-wide fact (marketplace
+    // grouping, landing counts, seeded mirror) that happened to decide a directory
+    // question by accident.
+    // Also 2026-09-07, on top of that: withheld 45→48 (the three Chatous reads:
+    // check-session, get-account-state, poll-events — the other eight ops the port
+    // adds are writes and identity operations that ship `publish_targets: []`, so
+    // they never enter the generated catalog and never reach this table). Same
+    // mechanism as every entry above: `Social Media`, so the CATEGORY filter
+    // withheld them the moment they landed with nobody editing the exclusion list.
+    // Here the bargain that list names fits exactly rather than loosely — Chatous
+    // matchmaking puts an account in front of random real people, and these reads
+    // carry an account's own live conversations. **LISTED did not move, so no
+    // listing or submission copy needs an edit for this change**; that is the
+    // number the marketplace text quotes, and the one this assertion protects.
+    // Also 2026-09-07, on top of that: listed 36→44 (the eight public `github-*`
+    // reads of the G2 port — search issues/repos/users/discussions, repo issues,
+    // repo contributors, issue comments, commit-author emails). These are the first
+    // entries in a while to move the LISTED side rather than the withheld one: they
+    // are `Developer Tools`, which no category filter touches. The port's four WRITE
+    // ops are internal (`publish_targets: []`) and never enter this union at all, so
+    // WITHHELD is unchanged at 48. **LISTED moved, so the marketplace listing copy
+    // that quotes this number needs the edit that goes with it.**
+    // Also 2026-09-07, on the next commit of the same port: listed 44→43,
+    // withheld 48→49. `github-user-emails.get` joins DIRECTORY_EXCLUDED_SLUGS —
+    // it fans a repo's commit history out into the email addresses of everyone
+    // who has committed to it, which is the same personal-data bargain the
+    // LinkedIn people-search was withheld over, and no category filter can see it
+    // because the operation is `Developer Tools` like the other seven. This is a
+    // SLUG carve-out rather than a category change on purpose: the op belongs with
+    // its siblings everywhere else in the catalog, and only the directory question
+    // differs. **LISTED moved again, so the listing copy quoting it takes the
+    // combined 36→43 for this port, not the intermediate 44.**
+    // Also 2026-09-07, on top of that: withheld 49→52 (contra-job-detail,
+    // contra-company-profile and contra-discover-people, the three PUBLIC reads of
+    // the contra.com port — the other ten ops it adds are session, identity and write
+    // operations shipping `publish_targets: []`, so they never enter the generated
+    // catalog and never reach this table). Same mechanism as every entry above: they
+    // are `Social Media`, so the CATEGORY filter withheld all three the moment they
+    // landed with nobody editing the exclusion list. The bargain that list names fits
+    // contra-discover-people squarely — it returns freelancers' names and profile
+    // handles — and the other two only loosely, a job advertisement and a company page
+    // being a business's own public copy. Withholding is the conservative side and
+    // costs nothing: the stdio surface still carries every operation. **LISTED did not
+    // move, so no listing or submission copy needs an edit for this change.**
+    expect(LISTED).toHaveLength(43);
+    expect(WITHHELD).toHaveLength(52);
   });
 });

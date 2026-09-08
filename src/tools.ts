@@ -65,8 +65,14 @@ export const DIRECTORY_EXCLUDED_CATEGORIES: readonly string[] = ['Social Media',
  * filter cannot catch it. Recategorizing it in the worker manifest would also
  * work, but that changes every catalog surface (marketplace grouping, landing
  * counts, seeded mirror) for what is a directory-only concern.
+ * `github-user-emails.get` is the same shape: it reads a person's email
+ * addresses off their public commits, and it is categorized `Developer Tools`,
+ * so the category filter cannot catch it either.
  */
-export const DIRECTORY_EXCLUDED_SLUGS: readonly string[] = ['linkedin-profile-search.post'];
+export const DIRECTORY_EXCLUDED_SLUGS: readonly string[] = [
+  'linkedin-profile-search.post',
+  'github-user-emails.get',
+];
 
 /** True when an operation belongs on the hosted, directory-listed surface. */
 export const isDirectoryListedOperation: ToolFilter = (op) =>
@@ -100,20 +106,20 @@ export type McpToolAnnotations = {
 };
 
 /**
- * The four behavioural classes the 57 published operations fall into.
+ * The six behavioural classes the 95 published operations fall into.
  *
- * `openWorldHint` is `true` in all three, and that is not a shortcut: upAPI is
+ * `openWorldHint` is `true` in five of the six, and that is not a shortcut: upAPI is
  * an API marketplace, so EVERY published operation exists to reach a system
  * upAPI does not own — GitHub, Reddit, an IMAP host, the Wayback Machine.
- * There is no workspace/key-management tool in the published catalog (those
- * live in the dashboard and the REST gateway, not here), so there is no
- * candidate for `openWorldHint: false`. If one is ever added, it gets its own
- * class below rather than an exception inside one of these.
+ * One candidate for `openWorldHint: false` now exists and is the only one:
+ * LOCAL_COMPUTE, whose operation runs entirely inside the worker and reaches no
+ * system at all. It was added as its own class below rather than as an exception
+ * inside one of the others, which is what the rule here prescribes.
  */
 
 /**
  * A plain lookup: the worker reads a third-party endpoint and writes nothing
- * anywhere. 53 of the 57 published operations.
+ * anywhere. 89 of the 95 published operations.
  *
  * `readOnlyHint` here is derived from what the worker actually DOES, never from
  * the slug's `.get`/`.post` suffix. That suffix names the operation's verb on
@@ -123,12 +129,22 @@ export type McpToolAnnotations = {
  *
  * Verified by grepping every worker under
  * `apps/iii/marketplace-api-worker-{python,ts}/made_by_upapi/` for an outbound
- * POST and intersecting the hits with the published catalog: the only published
- * operations that POST upstream are `instagram_check_account.py` and
- * `audio_transcribe.py` (job submission), each classified separately below. The
- * other POST-ing workers there — account creation, login, comment posting,
- * messaging — are absent from the catalog, so no tool exists for them on any
- * transport.
+ * POST and intersecting the hits with the published catalog. Two published
+ * operations POST upstream to CHANGE something and are classified separately
+ * below: `instagram_check_account.py` and `audio_transcribe.py` (job
+ * submission). The other POST-ing workers there — account creation, login,
+ * comment posting, messaging — are absent from the catalog, so no tool exists
+ * for them on any transport.
+ *
+ * SINCE 2026-09-07 THE HTTP VERB ALONE NO LONGER SEPARATES THOSE TWO SETS. The
+ * Wellfound operations speak persisted GraphQL, so every one of them — reads
+ * included — is an outbound `POST /graphql`, and the read/write split lives in
+ * the OPERATION NAME inside the body (`SeoLandingRoleRemoteSearchPage` reads,
+ * `CandidateSendMessage` writes) rather than in the method. A future grep for
+ * `session.post` will therefore hit a dozen pure readers; read what the body
+ * asks for before reclassifying any of them. Wellfound's three genuine writes
+ * (login, apply, send-message) are `publishTargets=[]` and so are absent from
+ * the catalog and from this table.
  */
 const THIRD_PARTY_READ: McpToolAnnotations = {
   readOnlyHint: true,
@@ -201,6 +217,38 @@ const GPU_JOB_SUBMIT: McpToolAnnotations = {
 };
 
 /**
+ * `wellfound-conversation-detail.post` — opens ONE recruiter thread in the
+ * caller's own Wellfound inbox and returns its messages.
+ *
+ * Not `readOnlyHint: true`, and the reason is an honest gap rather than a
+ * measured side effect. A Wellfound conversation carries a server-side `unread`
+ * flag, which `wellfound-list-conversations.post` reads back and which the
+ * source bot's inbox loop gates on; this is the query Wellfound's own UI fires
+ * when a human OPENS a thread, which is exactly the moment a product normally
+ * clears that flag. Whether it does could not be settled here: it needs a live
+ * account with a genuinely unread thread, and no login was performed for this
+ * port. Marking someone's recruiter message read is a real change to their
+ * inbox and precisely the class of call a host should confirm rather than
+ * auto-run, so the conservative annotation is the honest one until somebody
+ * measures it.
+ *
+ * TO SETTLE IT: list conversations, note an `unread: true` thread, call this
+ * operation on it, list again. If `unread` survives, this becomes
+ * THIRD_PARTY_READ and this block goes away. Nothing is destroyed either way,
+ * and a second identical call leaves the same state, so only `readOnlyHint`
+ * is in question.
+ *
+ * `wellfound-list-conversations.post` stays THIRD_PARTY_READ deliberately:
+ * listing threads is not opening one.
+ */
+const INBOX_THREAD_OPEN: McpToolAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: true,
+};
+
+/**
  * `text-analyze.post` — the Rust worker's pure-compute endpoint: counts and a SHA-256
  * over a caller-supplied string.
  *
@@ -229,7 +277,7 @@ const LOCAL_COMPUTE: McpToolAnnotations = {
  * `packages/mcp/src/__tests__/tools.test.ts` pins the same invariant at runtime.
  */
 export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnotations>> = {
-  // ── Third-party reads (56) ────────────────────────────────────────────────
+  // ── Third-party reads (89) ────────────────────────────────────────────────
   'archive-wayback.get': THIRD_PARTY_READ,
   // Renders/reads a caller-named page or document and writes nothing anywhere.
   // The three render ops (screenshot, html-to-pdf, fetch-markdown) hold a real
@@ -248,13 +296,58 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
   'screenshot.post': THIRD_PARTY_READ,
   'bbc-news.get': THIRD_PARTY_READ,
   'bluesky-profile.get': THIRD_PARTY_READ,
+  // The three Chatous reads answer questions about the CALLER'S OWN account, from
+  // that account's `connect.sid` cookie: is the session still accepted, what does
+  // the account's own profile and conversation list look like, and what has
+  // arrived since. They write nothing — no message, no profile edit, no queue
+  // entry — and the eight Chatous operations that DO write are absent from the
+  // catalog, so no tool exists for them on any transport.
+  //
+  // Two of them reach Chatous over a SockJS WEBSOCKET rather than an HTTP
+  // request, which the class comment above does not cover: its `readOnlyHint`
+  // was established by grepping the workers for an outbound POST, and a socket
+  // is neither. Checked directly instead. `chatous-get-account-state` and
+  // `chatous-poll-events` send exactly ONE frame, `{"type":"init"}` — a
+  // subscribe, which is what makes the server push the opening burst these
+  // operations read — and then only receive until a bounded message/second
+  // budget runs out. `chatous-check-session` is a plain GET.
+  //
+  // Idempotent in the sense the hint means, on the same terms as the Maps
+  // operations above: a repeat call is safe and changes nothing, while the
+  // events a poll returns naturally differ between calls because the account's
+  // inbox moves underneath it.
+  'chatous-check-session.get': THIRD_PARTY_READ,
+  'chatous-get-account-state.get': THIRD_PARTY_READ,
+  'chatous-poll-events.get': THIRD_PARTY_READ,
   'cloudflare-page-title.get': THIRD_PARTY_READ,
+  // The three contra.com reads fetch Contra's own server-rendered public pages
+  // anonymously and write nothing: no Contra account is involved, so there is no
+  // identity for them to act on. `contra-discover-people.get` reads a directory whose
+  // membership Contra reorders, which is the same sense of idempotent the Maps note
+  // below sets out — a repeat call is free of side effects, not guaranteed identical.
+  'contra-company-profile.get': THIRD_PARTY_READ,
+  'contra-discover-people.get': THIRD_PARTY_READ,
+  'contra-job-detail.get': THIRD_PARTY_READ,
   'crypto-price.get': THIRD_PARTY_READ,
   'currency-convert.get': THIRD_PARTY_READ,
   'detect-tech-stack.post': THIRD_PARTY_READ,
   'devto-articles-search.get': THIRD_PARTY_READ,
+  // The eight `github-*` reads added by the G2 port are plain GETs against
+  // api.github.com on the worker's own egress: they read issues, repos, users,
+  // contributors, comments and commit-author emails and write nothing. The four
+  // GitHub WRITE ops that shipped alongside them (comment, reaction, star,
+  // follow) are internal (`publishTargets: []`), so they never reach this union
+  // and are deliberately absent — an MCP host cannot invoke them at all.
+  'github-issue-comments.get': THIRD_PARTY_READ,
+  'github-repo-contributors.get': THIRD_PARTY_READ,
+  'github-repo-issues.get': THIRD_PARTY_READ,
   'github-repo.get': THIRD_PARTY_READ,
+  'github-search-discussions.get': THIRD_PARTY_READ,
+  'github-search-issues.get': THIRD_PARTY_READ,
+  'github-search-repos.get': THIRD_PARTY_READ,
+  'github-search-users.get': THIRD_PARTY_READ,
   'github-trending.get': THIRD_PARTY_READ,
+  'github-user-emails.get': THIRD_PARTY_READ,
   'github-user.get': THIRD_PARTY_READ,
   'google-autocomplete.post': THIRD_PARTY_READ,
   // The three Maps operations read Google's own Maps endpoints and write nowhere.
@@ -271,6 +364,12 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
   'instagram-discover-location.post': THIRD_PARTY_READ,
   'instagram-get-post-commenters.post': THIRD_PARTY_READ,
   'instagram-get-post-info.post': THIRD_PARTY_READ,
+  // Resolves a numeric pk to a profile. A read on the anonymous private-API
+  // surface, which today answers with an identity-only stub (username and picture,
+  // no counts) and would answer in full if Instagram widened it; either way the
+  // call writes nothing and a repeat is free of side effects, so the annotation
+  // does not depend on which of the two answers arrives.
+  'instagram-get-user-by-id.post': THIRD_PARTY_READ,
   'instagram-get-user-posts.post': THIRD_PARTY_READ,
   'instagram-get-user-profile.post': THIRD_PARTY_READ,
   'ip-geolocation.get': THIRD_PARTY_READ,
@@ -295,13 +394,43 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
   'stackexchange-search.get': THIRD_PARTY_READ,
   'tiktok-check-account-health.get': THIRD_PARTY_READ,
   'tiktok-discover-users.post': THIRD_PARTY_READ,
+  // The three reads added with the TikTok port are the same bargain as the rest of this
+  // block: an anonymous GET of a public video, its oEmbed record or a comment's replies.
+  // Nothing is posted, no session is spent, and a WAF refusal is reported as a block
+  // rather than as a missing record — so a host retrying one changes nothing upstream.
+  'tiktok-get-comment-replies.get': THIRD_PARTY_READ,
   'tiktok-get-comments.post': THIRD_PARTY_READ,
   'tiktok-get-user-profile.post': THIRD_PARTY_READ,
   'tiktok-get-video-detail.post': THIRD_PARTY_READ,
+  'tiktok-get-video-embed.get': THIRD_PARTY_READ,
+  'tiktok-oembed.get': THIRD_PARTY_READ,
   'timezone-lookup.get': THIRD_PARTY_READ,
   'translate-text.get': THIRD_PARTY_READ,
+  // Upwork's KEYLESS visitor job surface: an anonymous client_credentials bearer
+  // over two read-only GraphQL aliases. No account, no cookie, no browser, and
+  // nothing is ever submitted — the authenticated half of Upwork (proposals, DMs,
+  // invitations) is deliberately not in upAPI at all.
+  'upwork-jobs-detail.get': THIRD_PARTY_READ,
+  'upwork-jobs-search.get': THIRD_PARTY_READ,
   'weather-current.get': THIRD_PARTY_READ,
   'web-search.post': THIRD_PARTY_READ,
+  // Wellfound reads. Every one is an outbound POST to /graphql because the
+  // surface speaks persisted queries; each carries a READ operation name and
+  // changes nothing. The five anonymous ones mint or spend a public session;
+  // the six session-scoped ones read the caller's OWN account (their searches,
+  // their applications, their pipeline, their profile) and write nowhere.
+  // wellfound-conversation-detail is the one exception, below.
+  'wellfound-application-modal.post': THIRD_PARTY_READ,
+  'wellfound-browse-jobs.post': THIRD_PARTY_READ,
+  'wellfound-company-overview.post': THIRD_PARTY_READ,
+  'wellfound-job-detail.post': THIRD_PARTY_READ,
+  'wellfound-list-applications.post': THIRD_PARTY_READ,
+  'wellfound-list-conversations.post': THIRD_PARTY_READ,
+  'wellfound-pipeline-stats.post': THIRD_PARTY_READ,
+  'wellfound-public-session.post': THIRD_PARTY_READ,
+  'wellfound-refresh-ops.post': THIRD_PARTY_READ,
+  'wellfound-search-jobs.post': THIRD_PARTY_READ,
+  'wellfound-viewer.post': THIRD_PARTY_READ,
   'wikipedia-article.get': THIRD_PARTY_READ,
 
   // ── Mailbox reads, caller-supplied IMAP credentials (2) ───────────────────
@@ -313,6 +442,9 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
 
   // ── GPU job submission (1) ────────────────────────────────────────────────
   'audio-transcribe.post': GPU_JOB_SUBMIT,
+
+  // ── Inbox thread open, side effect unmeasured (1) ─────────────────────────
+  'wellfound-conversation-detail.post': INBOX_THREAD_OPEN,
 
   // ── Local pure compute, no network (1) ────────────────────────────────────
   'text-analyze.post': LOCAL_COMPUTE,

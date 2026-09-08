@@ -265,17 +265,32 @@ function searchSpecs(
     .toLowerCase()
     .split(/[^a-z0-9]+/i)
     .filter(Boolean);
+  // An agent that already knows the slug asks for the slug. `scoreOperation`'s
+  // `slug === term` tier cannot serve that request: the split above removes every
+  // `-` and `.`, and every operation slug contains one, so no term can ever equal
+  // a slug. It went unnoticed while no two published slugs shared a prefix; the
+  // moment `github-repo-contributors.get` shipped beside `github-repo.get` both
+  // scored identically on the terms `github`/`repo`/`get` and the alphabetical
+  // tie-break handed an exact request to its sibling. The whole query is matched
+  // here instead, and it is a SEPARATE sort key rather than a bigger number,
+  // because a score can always be out-summed by a query with more terms.
+  const exactSlug = args.query.trim().toLowerCase();
   const wantedCategory = args.category?.trim().toLowerCase();
 
-  const scored: Array<{ spec: UpapiToolSpec; score: number }> = [];
+  const scored: Array<{ spec: UpapiToolSpec; score: number; exact: boolean }> = [];
   for (const spec of specs) {
     if (wantedCategory && spec.category.toLowerCase() !== wantedCategory) continue;
     const score = scoreOperation(spec, terms);
-    if (score > 0) scored.push({ spec, score });
+    if (score > 0) scored.push({ spec, score, exact: spec.slug.toLowerCase() === exactSlug });
   }
   // Ties break on slug so the same query always returns the same order — an
   // agent re-running a search must not see the list reshuffle under it.
-  scored.sort((a, b) => b.score - a.score || a.spec.slug.localeCompare(b.spec.slug));
+  scored.sort(
+    (a, b) =>
+      Number(b.exact) - Number(a.exact) ||
+      b.score - a.score ||
+      a.spec.slug.localeCompare(b.spec.slug),
+  );
 
   return {
     total: scored.length,
