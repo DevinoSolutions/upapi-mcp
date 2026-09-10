@@ -152,6 +152,11 @@ describe('every tool declares how it behaves', () => {
       'email-read-verification-code.post',
       'email-read-verification-link.post',
       'instagram-check-account.post',
+      // The only published operation that puts content into the open world under
+      // a person's name. It is here rather than in the listed-writer carve-out
+      // below because `Social Media` is a directory-excluded category, so a
+      // connector host never sees it — see PUBLIC_POST_WRITE in tools.ts.
+      'reddit-oauth-post-comment.post',
       // Opening a Wellfound recruiter thread. It is the fourth REVIEWED
       // non-read-only op and the only one here whose side effect is unmeasured
       // rather than known: a conversation carries a server-side `unread` flag,
@@ -513,7 +518,19 @@ describe('the hosted surface is scoped to what a directory may advertise', () =>
     // being a business's own public copy. Withholding is the conservative side and
     // costs nothing: the stdio surface still carries every operation. **LISTED did not
     // move, so no listing or submission copy needs an edit for this change.**
+    // Also 2026-09-10: withheld 52→54 (reddit-oauth-me.get and
+    // reddit-oauth-post-comment.post, the registered-app lane over Reddit's own
+    // OAuth2 API). Same mechanism as every entry above: they are `Social Media`, so
+    // the CATEGORY filter withheld both the moment they landed with nobody editing
+    // the exclusion list — and here that filter is load-bearing rather than merely
+    // conservative, because the post operation is the first published op that
+    // publishes content in the open world under a person's name. It is a writer, so
+    // it also joins the exhaustive list in "claims read-only ONLY for operations that
+    // write nothing upstream" above; it does NOT join the listed-writer carve-out
+    // below, because being withheld is exactly what keeps it off the surface a
+    // connector host runs unattended. **LISTED did not move, so no listing or
+    // submission copy needs an edit for this change.**
     expect(LISTED).toHaveLength(43);
-    expect(WITHHELD).toHaveLength(52);
+    expect(WITHHELD).toHaveLength(54);
   });
 });

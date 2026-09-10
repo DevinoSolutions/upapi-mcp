@@ -249,6 +249,34 @@ const INBOX_THREAD_OPEN: McpToolAnnotations = {
 };
 
 /**
+ * `reddit-oauth-post-comment.post` — publishes a comment to Reddit under the
+ * account the caller's OAuth credentials speak as.
+ *
+ * The first published operation that puts content into the open world under a
+ * person's name, so every hint here is the conservative one and none of them is
+ * inherited from a neighbour. Not read-only: making the comment exist IS the
+ * operation. Not idempotent: Reddit accepts the same text twice and the account
+ * is left with two comments, so a client retrying on the strength of an
+ * idempotency hint double-posts in public — precisely the failure that hint
+ * exists to prevent.
+ *
+ * `destructiveHint: false` is the narrow, spec-level answer and NOT a claim that
+ * the call is harmless: a new comment is ADDITIVE, deleting and overwriting
+ * nothing, which is what the field asks. What actually keeps this away from an
+ * unattended host is the category — `Social Media` is in
+ * DIRECTORY_EXCLUDED_CATEGORIES, so the tool never reaches the listed surface a
+ * connector runs from, and the "exactly one listed writer" assertion in
+ * __tests__/tools.test.ts still holds. If that category is ever unexcluded, this
+ * operation is the first one to look at.
+ */
+const PUBLIC_POST_WRITE: McpToolAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: false,
+  openWorldHint: true,
+};
+
+/**
  * `text-analyze.post` — the Rust worker's pure-compute endpoint: counts and a SHA-256
  * over a caller-supplied string.
  *
@@ -277,7 +305,7 @@ const LOCAL_COMPUTE: McpToolAnnotations = {
  * `packages/mcp/src/__tests__/tools.test.ts` pins the same invariant at runtime.
  */
 export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnotations>> = {
-  // ── Third-party reads (89) ────────────────────────────────────────────────
+  // ── Third-party reads (90) ────────────────────────────────────────────────
   'archive-wayback.get': THIRD_PARTY_READ,
   // Renders/reads a caller-named page or document and writes nothing anywhere.
   // The three render ops (screenshot, html-to-pdf, fetch-markdown) hold a real
@@ -387,6 +415,11 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
   'reddit-check-account-health.get': THIRD_PARTY_READ,
   'reddit-check-comment-visibility.get': THIRD_PARTY_READ,
   'reddit-get-trending.get': THIRD_PARTY_READ,
+  // Exchanges the caller's refresh token for a short-lived access token and reads
+  // `/api/v1/me` with it. Minting an access token is how an authenticated read
+  // authenticates; Reddit does not rotate the refresh token, and nothing on the
+  // account is created, so this is a read like its neighbours.
+  'reddit-oauth-me.get': THIRD_PARTY_READ,
   'reddit-scrape-post.get': THIRD_PARTY_READ,
   'reddit-search-posts.get': THIRD_PARTY_READ,
   'reddit-subreddit-info.get': THIRD_PARTY_READ,
@@ -445,6 +478,9 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
 
   // ── Inbox thread open, side effect unmeasured (1) ─────────────────────────
   'wellfound-conversation-detail.post': INBOX_THREAD_OPEN,
+
+  // ── Publishes content under the caller's own account (1) ──────────────────
+  'reddit-oauth-post-comment.post': PUBLIC_POST_WRITE,
 
   // ── Local pure compute, no network (1) ────────────────────────────────────
   'text-analyze.post': LOCAL_COMPUTE,
