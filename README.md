@@ -148,6 +148,57 @@ createUpapiTools({
 });
 ```
 
+### `createUpapiMcpServer` — Code Mode by default
+
+`createUpapiMcpServer` builds a Mastra `MCPServer` (`@mastra/mcp`, also an optional peer). Its
+**default tool surface is Code Mode**: `search_tools` + `execute_typescript` instead of one tool
+per operation — measured on the full 99-operation catalog, `tools/list` drops from **111,016
+bytes to 1,069 bytes** (99 tools → 2), because the table no longer grows with the catalog at all.
+
+```ts
+import { createGatewayCaller } from '@upapi/mcp';
+import { createUpapiMcpServer } from '@upapi/mcp/mastra';
+
+const server = createUpapiMcpServer({
+  caller: createGatewayCaller({ apiKey: process.env.UPAPI_API_KEY! }),
+});
+
+await server.startStdio();
+```
+
+- **`search_tools({ query? })`** finds the operations this connection can reach and returns them
+  as `declare function external_<name>(...)` TypeScript signatures.
+- **`execute_typescript({ code })`** runs a short TypeScript program in an isolated QuickJS sandbox
+  (`@mastra/quickjs`, another optional peer — no native binary, no filesystem/network/process
+  access beyond the injected `external_*` functions). Batch several operations into one round trip
+  with `Promise.all` instead of one tool call each. Killed after 30 seconds.
+
+Every `external_*` call resolves to the exact same `createUpapiTools(options)` tool object the
+`full` surface (below) calls — there is no second auth path. A denied or failed operation call
+surfaces **inside the sandbox** as a thrown `Error("<CODE>: <message>")`, so the guest program's
+own `try`/`catch` can inspect and branch on the code; that is separate from a malformed
+`execute_typescript` **input**, which fails the call itself before the sandbox ever starts.
+
+Set `MCP_TOOL_SURFACE` (or pass `surface`) to change what is advertised:
+
+| Value                  | Advertises                                                | When to use it                                            |
+| ---------------------- | --------------------------------------------------------- | --------------------------------------------------------- |
+| `codemode` _(default)_ | `search_tools` + `execute_typescript`                     | Any model that can write a few lines of TypeScript        |
+| `full`                 | One tool per operation — today's `createUpapiTools` table | Rollback switch, or a client already built against it     |
+| `both`                 | The union of the two                                      | Exercising or migrating off of one surface mid-transition |
+
+```bash
+MCP_TOOL_SURFACE=full node my-server.js   # one tool per operation, the pre-Code Mode shape
+```
+
+```ts
+createUpapiMcpServer({ caller, surface: 'full' }); // same thing, set in code instead of env
+```
+
+`instructions` on the server carries the Code Mode contract automatically whenever a `codemode`
+tool is on the table (`codemode` and `both`) — a model was not told to write TypeScript against
+`search_tools`/`execute_typescript` otherwise.
+
 ## Build your own server
 
 `caller` is the only thing the tool table does not supply, which is what lets the same tools run

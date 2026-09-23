@@ -72,8 +72,9 @@
     "zod": "^3.25.0"
   },
   "peerDependencies": {
-    "@mastra/core": "^1.57.0",
-    "@mastra/mcp": "^1.15.1"
+    "@mastra/core": "^1.68.0",
+    "@mastra/mcp": "^1.18.0",
+    "@mastra/quickjs": "^0.1.1"
   },
   "peerDependenciesMeta": {
     "@mastra/core": {
@@ -81,11 +82,15 @@
     },
     "@mastra/mcp": {
       "optional": true
+    },
+    "@mastra/quickjs": {
+      "optional": true
     }
   },
   "devDependencies": {
-    "@mastra/core": "^1.57.0",
-    "@mastra/mcp": "^1.15.1",
+    "@mastra/core": "^1.68.0",
+    "@mastra/mcp": "^1.18.0",
+    "@mastra/quickjs": "^0.1.1",
     "@types/node": "^22.10.2",
     "rimraf": "^6.0.1",
     "typescript": "npm:@typescript/typescript6@6.0.2",
