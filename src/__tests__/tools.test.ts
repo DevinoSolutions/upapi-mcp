@@ -43,12 +43,13 @@ async function rpcResult(request: Request, caller = noopCaller): Promise<Record<
 /**
  * Operations that reach NOTHING outside the process, so `openWorldHint` is false.
  *
- * Exactly one today: `text-analyze.post`, the Rust worker's pure-compute endpoint.
- * A list rather than a special case in each assertion, so adding a second one is a
- * single reviewed edit — and so the two assertions below can never disagree about
- * which operations are exempt.
+ * `text-analyze.post`, the Rust worker's pure-compute endpoint, plus (2026-09-22)
+ * `email-generate-address.post`, which builds a persona string from an in-process
+ * random draw and verifies/creates nothing anywhere. A list rather than a special
+ * case in each assertion, so adding one is a single reviewed edit — and so the
+ * two assertions below can never disagree about which operations are exempt.
  */
-const CLOSED_WORLD_SLUGS: readonly string[] = ['text-analyze.post'];
+const CLOSED_WORLD_SLUGS: readonly string[] = ['text-analyze.post', 'email-generate-address.post'];
 
 /** The same set as MCP tool names (`operationId`: slug with `.`/`-` → `_`). */
 const CLOSED_WORLD_TOOL_NAMES: readonly string[] = OPERATIONS.filter((op) =>
@@ -149,6 +150,7 @@ describe('every tool declares how it behaves', () => {
       .sort();
     expect(writers).toEqual([
       'audio-transcribe.post',
+      'email-read-verification-code-graph.post',
       'email-read-verification-code.post',
       'email-read-verification-link.post',
       'instagram-check-account.post',
@@ -530,7 +532,14 @@ describe('the hosted surface is scoped to what a directory may advertise', () =>
     // below, because being withheld is exactly what keeps it off the surface a
     // connector host runs unattended. **LISTED did not move, so no listing or
     // submission copy needs an edit for this change.**
+    // 2026-09-22: withheld 54→56 (`email-generate-address.post` and
+    // `email-read-verification-code-graph.post`, two new Python email-signup
+    // primitives). Both are categorized `Utility`, which already excludes the two
+    // pre-existing `email-read-verification-*` reads for the same reason — see
+    // DIRECTORY_EXCLUDED_CATEGORIES's own comment — so the CATEGORY filter withheld
+    // both the moment they landed with nobody editing the exclusion list. **LISTED
+    // did not move, so no listing or submission copy needs an edit for this change.**
     expect(LISTED).toHaveLength(43);
-    expect(WITHHELD).toHaveLength(54);
+    expect(WITHHELD).toHaveLength(56);
   });
 });

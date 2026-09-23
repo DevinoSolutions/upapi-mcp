@@ -44,10 +44,13 @@ export type ToolFilter = (op: OperationMeta) => boolean;
  *    several platforms' terms disallow the collection outright. That is a
  *    different bargain from a developer wiring the same operation into their own
  *    system with their own key, which is why the stdio surface keeps them.
- *  - **Utility** — the two `email-read-verification-*` operations. In a CI
- *    harness reading a signup code out of an inbox is ordinary QA plumbing; in a
- *    directory listing it is the bulk-account-creation primitive, and it reads
- *    that way to a reviewer no matter what we intended.
+ *  - **Utility** — the email-signup primitives: the two `email-read-verification-*`
+ *    reads, plus (2026-09-22) `email-generate-address.post` and
+ *    `email-read-verification-code-graph.post`, the outlook.com/Graph twin of the
+ *    IMAP reader. In a CI harness reading a signup code out of an inbox, or minting
+ *    a throwaway address, is ordinary QA plumbing; in a directory listing the same
+ *    four operations ARE the bulk-account-creation primitive, and they read that
+ *    way to a reviewer no matter what we intended.
  *
  * A CATEGORY list, not a slug list, on purpose: a new social operation added to
  * the catalog tomorrow is excluded the moment it lands, with nobody having to
@@ -111,10 +114,14 @@ export type McpToolAnnotations = {
  * `openWorldHint` is `true` in five of the six, and that is not a shortcut: upAPI is
  * an API marketplace, so EVERY published operation exists to reach a system
  * upAPI does not own — GitHub, Reddit, an IMAP host, the Wayback Machine.
- * One candidate for `openWorldHint: false` now exists and is the only one:
- * LOCAL_COMPUTE, whose operation runs entirely inside the worker and reaches no
- * system at all. It was added as its own class below rather than as an exception
- * inside one of the others, which is what the rule here prescribes.
+ * One class carries `openWorldHint: false`: LOCAL_COMPUTE, for an operation that
+ * runs entirely inside the worker and reaches no system at all. 2026-09-22:
+ * `email-generate-address.post` joined `text-analyze.post` in this class — it
+ * builds a persona string from an in-process random draw and returns it,
+ * verifying and creating nothing anywhere, so the class is no longer a single
+ * operation but the reasoning is unchanged. It was added as its own class below
+ * rather than as an exception inside one of the others, which is what the rule
+ * here prescribes.
  */
 
 /**
@@ -466,9 +473,24 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
   'wellfound-viewer.post': THIRD_PARTY_READ,
   'wikipedia-article.get': THIRD_PARTY_READ,
 
-  // ── Mailbox reads, caller-supplied IMAP credentials (2) ───────────────────
+  // ── Mailbox reads, live-credential/mailbox side effects (3) ───────────────
   'email-read-verification-code.post': MAILBOX_READ,
   'email-read-verification-link.post': MAILBOX_READ,
+  // `email-read-verification-code-graph.post` — the Microsoft Graph twin, for
+  // outlook.com/consumer accounts whose IMAP switch is off (see the file header
+  // above this table's constants). It is not IMAP, so the SELECT-based
+  // readOnly:false reasoning behind MAILBOX_READ does not apply directly — but a
+  // consumer Microsoft refresh token CAN rotate on every grant
+  // (`_email_code.read_verification_code_graph`'s own comment: "The refresh
+  // token may rotate; use the new one for the next poll"), which silently
+  // invalidates the caller's STORED credential outside this process. That is a
+  // real, if narrow, side effect on state this operation does not own — the
+  // same category MAILBOX_READ exists to name — so it earns the same annotation
+  // by a different mechanism rather than falling through to THIRD_PARTY_READ.
+  // Message content and read/unread flags are untouched either way, which is
+  // why `destructiveHint` stays false and `idempotentHint` stays true: a repeat
+  // call can fail on a since-rotated token, but it never compounds an effect.
+  'email-read-verification-code-graph.post': MAILBOX_READ,
 
   // ── Account-recovery probe (1) ────────────────────────────────────────────
   'instagram-check-account.post': ACCOUNT_RECOVERY_PROBE,
@@ -482,8 +504,14 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
   // ── Publishes content under the caller's own account (1) ──────────────────
   'reddit-oauth-post-comment.post': PUBLIC_POST_WRITE,
 
-  // ── Local pure compute, no network (1) ────────────────────────────────────
+  // ── Local pure compute, no network (2) ────────────────────────────────────
   'text-analyze.post': LOCAL_COMPUTE,
+  // `email-generate-address.post` builds a persona string in-process (a random
+  // first/last name plus a numeric suffix) and returns it. Nothing is looked up,
+  // verified, or created anywhere — the op's own docstring says creating a real
+  // Outlook alias is explicitly OUTSIDE its scope — so it makes no network call
+  // of any kind and earns the same zero-network annotation as the Rust op above.
+  'email-generate-address.post': LOCAL_COMPUTE,
 };
 
 export type UpapiToolSpec = {
