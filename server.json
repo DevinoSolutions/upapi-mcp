@@ -58,7 +58,7 @@
         },
         {
           "name": "UPAPI_TOOL_MODE",
-          "description": "Tool table: full (default), directory (curated named tools) or compact.",
+          "description": "Tool table: compact (default), directory (curated named tools) or full.",
           "isRequired": false,
           "isSecret": false,
           "format": "string"

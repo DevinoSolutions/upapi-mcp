@@ -56,7 +56,7 @@ Claude Desktop (`claude_desktop_config.json`), Cursor, and Windsurf take the sam
 | ----------------- | -------- | ------------------------------------------------------ |
 | `UPAPI_API_KEY`   | required | an `upapi_` key                                        |
 | `UPAPI_BASE_URL`  | optional | gateway origin, defaults to `https://api.upapi.io`     |
-| `UPAPI_TOOL_MODE` | optional | `full` (default), `directory` or `compact` — see Tools |
+| `UPAPI_TOOL_MODE` | optional | `compact` (default), `directory` or `full` — see Tools |
 
 The key is never validated locally — only checked for presence, so a missing one fails
 immediately with a readable message instead of surfacing later as an unexplained 401 inside a
@@ -91,7 +91,9 @@ repo/user, npm package, IP geolocation, Wikipedia, currency — with read tools 
 listed separately and no `call_op`. That is the shape AI-directory review criteria ask for (a
 catch-all dispatcher with a target parameter is a rejection), and it is what the Claude Desktop
 Extension ships with. The local stdio server takes the same three names in `UPAPI_TOOL_MODE`,
-defaulting to `full`.
+defaulting to `compact` — the same few-kilobyte shape the hosted endpoint defaults to. `full`
+remains available (`UPAPI_TOOL_MODE=full`) as the rollback for a client already configured
+against the one-tool-per-operation shape this server used to default to.
 
 All three modes reach exactly the same operations — the mode changes what is advertised, never
 what is allowed. Every tool in every mode carries `readOnlyHint`, `destructiveHint`,
@@ -101,8 +103,11 @@ slug's verb suffix. Operations are named after their slug with `.` and `-` repla
 (formats, bounds, defaults, nullability), because that schema is generated from the worker's own
 model and passed through untouched.
 
-The local (stdio) server always serves one tool per operation, and the whole catalog: it is
-installed deliberately, with your own key, into a client you chose.
+The local (stdio) server reaches the whole catalog in `compact` and `full` mode — it is installed
+deliberately, with your own key, into a client you chose. Its `directory` mode applies the same
+withheld-category exclusion the hosted endpoint's `directory` mode does, since that mode is what a
+public listing (like the Claude Desktop Extension) advertises to someone who has not made that
+choice yet.
 
 Descriptions carry the quota cost, so an agent can budget:
 

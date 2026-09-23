@@ -5,9 +5,13 @@
  *
  *  - **Local (stdio)** — `createUpapiStdioServer` + the `upapi-mcp` bin.
  *    Forwards to api.upapi.io with the user's `upapi_` key; the key is validated
- *    at the gateway, never here. Mastra bindings for the same table live behind
- *    the `@upapi/mcp/mastra` subpath, whose peer dependencies are optional —
- *    importing this barrel must not require @mastra/core to be installed.
+ *    at the gateway, never here. Reaches the whole catalog, unlike the hosted
+ *    transport's directory-mode exclusion, and defaults to the same compact
+ *    `search_ops`/`call_op` facade the hosted transport defaults to
+ *    (`UPAPI_TOOL_MODE`, rollback `full`). Mastra bindings for the same table
+ *    live behind the `@upapi/mcp/mastra` subpath, whose peer dependencies are
+ *    optional — importing this barrel must not require @mastra/core to be
+ *    installed.
  *  - **Hosted (HTTP)** — `handleUpapiMcpRequest`, mounted by the web app behind
  *    its own better-auth OAuth. Tool execution runs in-process through the same
  *    invocation + metering path the try-it panel uses. This is the surface AI

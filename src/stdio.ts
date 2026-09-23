@@ -45,14 +45,17 @@ export type CreateStdioServerOptions = CreateToolsOptions & {
   name?: string | undefined;
   version?: string | undefined;
   /**
-   * Which table to advertise. Defaults to `full` — one tool per operation, the
-   * surface every existing `npx -y @upapi/mcp` install was configured against.
+   * Which table to advertise. Defaults to `compact` — `search_ops` + `call_op` +
+   * the always-on operations, the same few-kilobyte shape the hosted transport
+   * already defaults to. `full` (one tool per operation, this server's original
+   * and long-standing default) remains available as a rollback for a client
+   * already configured against it.
    */
   mode?: McpToolMode | undefined;
 };
 
 /**
- * The mode named by `UPAPI_TOOL_MODE`, or `full`.
+ * The mode named by `UPAPI_TOOL_MODE`, or `compact`.
  *
  * Environment, because an MCP client config file can set nothing else — the
  * same reason the API key arrives that way. An unrecognized value falls back to
@@ -60,7 +63,7 @@ export type CreateStdioServerOptions = CreateToolsOptions & {
  * leave a user with a server that will not boot and no way to see why.
  */
 export function resolveStdioToolMode(env: NodeJS.ProcessEnv = process.env): McpToolMode {
-  return parseToolMode(env['UPAPI_TOOL_MODE']) ?? 'full';
+  return parseToolMode(env['UPAPI_TOOL_MODE']) ?? 'compact';
 }
 
 /**
@@ -73,7 +76,7 @@ export function resolveStdioToolMode(env: NodeJS.ProcessEnv = process.env): McpT
  * their own key and which therefore keep serving the whole catalog.
  */
 export function createUpapiStdioServer(options: CreateStdioServerOptions): Server {
-  const mode = options.mode ?? 'full';
+  const mode = options.mode ?? 'compact';
   const specs = createUpapiToolSpecs({
     ...options,
     filter: (op) =>

@@ -10,10 +10,11 @@ import { resolveStdioToolMode, startUpapiStdioServer } from './stdio.js';
  *
  *   UPAPI_API_KEY   (required)  an `upapi_` key from app.upapi.io → API Keys
  *   UPAPI_BASE_URL  (optional)  gateway origin; defaults to https://api.upapi.io
- *   UPAPI_TOOL_MODE (optional)  `full` (default, one tool per operation),
+ *   UPAPI_TOOL_MODE (optional)  `compact` (default, `search_ops` + `call_op`),
  *                               `directory` (curated named tools, reads and
- *                               writes separated) or `compact`
- *                               (`search_ops` + `call_op`).
+ *                               writes separated) or `full` (one tool per
+ *                               operation — the rollback for a client already
+ *                               configured against it).
  *
  * The key is NOT validated here — only checked for presence, so a missing one
  * fails immediately with a readable message instead of surfacing later as an

@@ -33,12 +33,31 @@ async function connect(mode: 'compact' | 'directory' | 'full') {
 }
 
 describe('resolveStdioToolMode', () => {
-  it('reads UPAPI_TOOL_MODE and defaults to full', () => {
-    expect(resolveStdioToolMode({})).toBe('full');
+  it('reads UPAPI_TOOL_MODE and defaults to compact', () => {
+    expect(resolveStdioToolMode({})).toBe('compact');
     expect(resolveStdioToolMode({ UPAPI_TOOL_MODE: 'directory' })).toBe('directory');
-    expect(resolveStdioToolMode({ UPAPI_TOOL_MODE: 'compact' })).toBe('compact');
+    expect(resolveStdioToolMode({ UPAPI_TOOL_MODE: 'full' })).toBe('full');
     // A typo in a client config must not leave a server that will not boot.
-    expect(resolveStdioToolMode({ UPAPI_TOOL_MODE: 'Directory ' })).toBe('full');
+    expect(resolveStdioToolMode({ UPAPI_TOOL_MODE: 'Directory ' })).toBe('compact');
+  });
+});
+
+describe('createUpapiStdioServer with no explicit mode', () => {
+  it('defaults to compact, matching the hosted endpoint', async () => {
+    const server = createUpapiStdioServer({ caller: noopCaller });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'test', version: '0.0.0' }, { capabilities: {} });
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    try {
+      const { tools } = await client.listTools();
+      // compact: search_ops + call_op + the always-on operations — nowhere near
+      // one tool per operation, and NOT the withheld directory-mode subset either.
+      expect(tools.length).toBeLessThan(OPERATIONS.length);
+      expect(tools.map((tool) => tool.name)).toContain(CALL_OP_TOOL_NAME);
+    } finally {
+      await client.close();
+      await server.close();
+    }
   });
 });
 
