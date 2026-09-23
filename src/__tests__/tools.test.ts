@@ -539,7 +539,13 @@ describe('the hosted surface is scoped to what a directory may advertise', () =>
     // DIRECTORY_EXCLUDED_CATEGORIES's own comment — so the CATEGORY filter withheld
     // both the moment they landed with nobody editing the exclusion list. **LISTED
     // did not move, so no listing or submission copy needs an edit for this change.**
-    expect(LISTED).toHaveLength(43);
+    // 2026-09-23: listed 43→44 (`youtube-get-transcript.get`, the first `YouTube`
+    // category operation). `YouTube` is not in DIRECTORY_EXCLUDED_CATEGORIES and the
+    // slug is not in DIRECTORY_EXCLUDED_SLUGS, so it reaches the hosted directory
+    // surface the moment it lands. WITHHELD is unchanged at 56. **LISTED moved, so
+    // the marketplace listing copy that quotes this number needs the edit that goes
+    // with it.**
+    expect(LISTED).toHaveLength(44);
     expect(WITHHELD).toHaveLength(56);
   });
 });
