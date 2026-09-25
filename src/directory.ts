@@ -29,21 +29,28 @@ import type { UpapiToolSpec } from './tools.js';
  * Curated, not derived: a listing is a promise about what this connector is
  * FOR, and a set that grew itself every time an operation shipped would make
  * that promise on nobody's authority. Chosen as the operations that are (a)
- * differentiated — upAPI runs the browser, the OCR and the Maps HTTP work, so
- * these are not one-line wrappers an agent could write itself — and (b) legible
- * to a reviewer reading tool names alone.
+ * either computed on upAPI's own infrastructure — upAPI runs the browser, the
+ * PDF and OCR engines and the transcription GPU itself, so these are not
+ * one-line wrappers an agent could write — or reads of an API the third party
+ * publishes for that purpose (GitHub, npm, Wikipedia, ECB rates, IP
+ * geolocation); and (b) legible to a reviewer reading tool names alone.
+ *
+ * Deliberately NOT here: operations that read a third party by fetching its
+ * web pages rather than through an API it publishes — the Google Maps trio
+ * (`google-maps-search.post`, `google-maps-place.get`, `google-maps-reviews.get`)
+ * and `web-search.post`. They stay served (callable by name in every mode and
+ * listed in `full`), but this listing is what an AI marketplace reviews, and
+ * OpenAI's app-submission guidelines refuse a surface that will "scrape
+ * external websites, relay queries, or integrate with third-party APIs without
+ * proper authorization". The 2026-09-22 ChatGPT Apps rejection named exactly
+ * that shape. `directory.test.ts` pins the exclusion so it cannot creep back.
  *
  * Ordered by cluster, and every entry is asserted against the live catalog by
  * `directory.test.ts`: a renamed or retired slug fails the suite instead of
  * quietly shrinking the listing.
  */
 export const DIRECTORY_FLAGSHIP_SLUGS: readonly string[] = [
-  // Places — the Maps trio, pure-HTTP against Google's own endpoints.
-  'google-maps-search.post',
-  'google-maps-place.get',
-  'google-maps-reviews.get',
-  // Open-web retrieval and rendering — the browser-backed operations.
-  'web-search.post',
+  // Open-web rendering — the browser-backed operations upAPI runs itself.
   'fetch-markdown.post',
   'screenshot.post',
   'html-to-pdf.post',
@@ -52,11 +59,11 @@ export const DIRECTORY_FLAGSHIP_SLUGS: readonly string[] = [
   'image-ocr.post',
   'audio-transcribe.post',
   'audio-transcribe-result.get',
-  // Developer lookups.
+  // Developer lookups — official REST APIs.
   'github-repo.get',
   'github-user.get',
   'npm-package.get',
-  // Reference data.
+  // Reference data — official public APIs.
   'ip-geolocation.get',
   'wikipedia-article.get',
   'currency-convert.get',

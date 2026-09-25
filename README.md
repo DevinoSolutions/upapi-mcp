@@ -85,12 +85,13 @@ There are two other tables. `?tools=full` gives every operation its own tool:
 claude mcp add --transport http upapi 'https://app.upapi.io/api/mcp?tools=full'
 ```
 
-`?tools=directory` gives a curated set of **named** tools for the flagship operations — the Maps
-trio, web search, page-to-Markdown, screenshot, HTML-to-PDF, PDF text, OCR, transcription, GitHub
-repo/user, npm package, IP geolocation, Wikipedia, currency — with read tools and write tools
-listed separately and no `call_op`. That is the shape AI-directory review criteria ask for (a
-catch-all dispatcher with a target parameter is a rejection), and it is what the Claude Desktop
-Extension ships with. The local stdio server takes the same three names in `UPAPI_TOOL_MODE`,
+`?tools=directory` gives a curated set of 13 **named** tools for the flagship operations —
+page-to-Markdown, screenshot, HTML-to-PDF, PDF text, OCR, transcription, GitHub repo/user, npm
+package, IP geolocation, Wikipedia, currency — with read tools and write tools listed separately
+and no `call_op`. That is the shape AI-directory review criteria ask for (a catch-all dispatcher
+with a target parameter is a rejection, and so is a listing that advertises scraped sources, which
+is why the Maps trio and web search stay callable but are not listed there), and it is what the
+Claude Desktop Extension ships with. The local stdio server takes the same three names in `UPAPI_TOOL_MODE`,
 defaulting to `compact` — the same few-kilobyte shape the hosted endpoint defaults to. `full`
 remains available (`UPAPI_TOOL_MODE=full`) as the rollback for a client already configured
 against the one-tool-per-operation shape this server used to default to.

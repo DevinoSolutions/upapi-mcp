@@ -18,6 +18,23 @@ import { handleUpapiMcpRequest, resolveToolMode } from '../http.js';
 
 const noopCaller: Caller = vi.fn(async () => ({ ok: true }));
 
+/**
+ * Operations that read a third party by fetching its web pages rather than
+ * through an API it publishes. Served in every mode (callable by name, listed
+ * in `full`) but never ADVERTISED by the directory listing: that listing is what
+ * an AI marketplace reviews, and OpenAI's app-submission guidelines refuse a
+ * surface that will "scrape external websites, relay queries, or integrate with
+ * third-party APIs without proper authorization". The 2026-09-22 ChatGPT Apps
+ * rejection named that shape; keeping these off the listing is the fix, and
+ * this list is what stops them creeping back.
+ */
+const SCRAPED_SOURCE_SLUGS: readonly string[] = [
+  'google-maps-search.post',
+  'google-maps-place.get',
+  'google-maps-reviews.get',
+  'web-search.post',
+];
+
 type ListedTool = {
   name: string;
   title?: string;
@@ -75,6 +92,23 @@ describe('the flagship list tracks the live catalog', () => {
   it('has no duplicates', () => {
     expect(new Set(DIRECTORY_FLAGSHIP_SLUGS).size).toBe(DIRECTORY_FLAGSHIP_SLUGS.length);
   });
+
+  it('keeps the scraped-source operations off the listing, not out of the catalog', () => {
+    // Both halves matter. Still served: this is a listing decision, exactly as
+    // `selectListedTools` documents, and a slug that vanished from the catalog
+    // would make the exclusion below pass for the wrong reason.
+    const served = new Set(SERVED.map((spec) => spec.slug));
+    for (const slug of SCRAPED_SOURCE_SLUGS) expect(served.has(slug), slug).toBe(true);
+    expect(DIRECTORY_FLAGSHIP_SLUGS.filter((slug) => SCRAPED_SOURCE_SLUGS.includes(slug))).toEqual(
+      [],
+    );
+  });
+
+  it('is the 13 tools the listing copy quotes', () => {
+    // `apps/docs/content/docs/mcp-clients.mdx`, `packages/mcp/README.md` and the
+    // `.mcpb` manifest quote this number. A change here is a change there.
+    expect(DIRECTORY_FLAGSHIP_SLUGS).toHaveLength(13);
+  });
 });
 
 describe('createDirectoryEntries splits on the read/write hint', () => {
@@ -107,10 +141,13 @@ describe('createDirectoryEntries splits on the read/write hint', () => {
   });
 
   it('drops a flagship slug the transport does not serve, instead of resurrecting it', () => {
-    const withoutMaps = SERVED.filter((spec) => !spec.slug.startsWith('google-maps-'));
-    const { read: narrowed, write: narrowedWrite } = createDirectoryEntries(withoutMaps);
+    const screenshot = SERVED.find((spec) => spec.slug === 'screenshot.post');
+    expect(screenshot).toBeDefined();
+    const withoutScreenshot = SERVED.filter((spec) => spec !== screenshot);
+    const { read: narrowed, write: narrowedWrite } = createDirectoryEntries(withoutScreenshot);
     const names = [...narrowed, ...narrowedWrite].map((entry) => entry.name);
-    expect(names.some((name) => name.startsWith('google_maps'))).toBe(false);
+    expect(names).not.toContain(screenshot!.name);
+    expect(names).toHaveLength(DIRECTORY_FLAGSHIP_SLUGS.length - 1);
   });
 });
 
@@ -119,6 +156,25 @@ describe('?tools=directory', () => {
     expect(resolveToolMode(rpc({}, '?tools=directory'))).toBe('directory');
     expect(resolveToolMode(rpc({}, '?tools=nonsense'))).toBe('compact');
     expect(resolveToolMode(rpc({}, '?tools=full'))).toBe('full');
+  });
+
+  it('is selected on the exact hosted path, /api/mcp?tools=directory', () => {
+    // The URL a marketplace is given verbatim. The path is asserted alongside
+    // the mode so that a request whose query string was lost on the way in
+    // would fail here rather than hand a reviewer the compact table.
+    const request = rpc({}, '?tools=directory');
+    const url = new URL(request.url);
+    expect(url.pathname).toBe('/api/mcp');
+    expect(url.search).toBe('?tools=directory');
+    expect(resolveToolMode(request)).toBe('directory');
+  });
+
+  it('advertises none of the scraped-source operations', async () => {
+    const names = (await listTools('?tools=directory')).map((tool) => tool.name);
+    const scraped = SERVED.filter((spec) => SCRAPED_SOURCE_SLUGS.includes(spec.slug));
+    // All four are still served, so their absence below is the listing's doing.
+    expect(scraped).toHaveLength(SCRAPED_SOURCE_SLUGS.length);
+    for (const spec of scraped) expect(names, spec.slug).not.toContain(spec.name);
   });
 
   it('advertises exactly the flagship tools, reads before writes', async () => {
