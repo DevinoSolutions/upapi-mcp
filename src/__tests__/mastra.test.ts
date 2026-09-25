@@ -78,6 +78,30 @@ describe('the default Mastra MCP surface is Code Mode', () => {
     }
   });
 
+  it('annotates both tools in tools/list, with a title and every hint spelled out', async () => {
+    const { client, close } = await connect(noopCaller);
+    try {
+      const { tools } = await client.listTools();
+      const byName = new Map(tools.map((tool) => [tool.name, tool]));
+      expect(byName.get(SEARCH_TOOLS_TOOL_NAME)?.annotations).toEqual({
+        title: 'Search Tools',
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      });
+      expect(byName.get(EXECUTE_TYPESCRIPT_TOOL_NAME)?.annotations).toEqual({
+        title: 'Execute TypeScript',
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      });
+    } finally {
+      await close();
+    }
+  });
+
   it('carries the Code Mode contract in the server instructions', async () => {
     const { client, close } = await connect(noopCaller);
     try {
@@ -178,6 +202,35 @@ describe('the default Mastra MCP surface is Code Mode', () => {
       })) as CallToolResult;
       expect(result.isError).not.toBe(true);
       expect(JSON.stringify(result)).toContain('RATE_LIMITED: Too many requests');
+    } finally {
+      await close();
+    }
+  });
+
+  it('arguments that fail the operation schema throw "INVALID_INPUT: ..." inside the sandbox', async () => {
+    const caller: Caller = vi.fn(async () => ({ ok: true }));
+    const { client, close } = await connect(caller);
+    try {
+      const op = OPERATIONS.find((candidate) => candidate.slug === 'wikipedia-article.get')!;
+      const result = (await client.callTool({
+        name: EXECUTE_TYPESCRIPT_TOOL_NAME,
+        arguments: {
+          code: `
+            try {
+              await external_${op.operationId}({});
+              return "no error thrown";
+            } catch (err) {
+              return err.message;
+            }
+          `,
+        },
+      })) as CallToolResult;
+      expect(result.isError).not.toBe(true);
+      expect(JSON.stringify(result)).toContain(
+        `INVALID_INPUT: Tool input validation failed for ${op.operationId}`,
+      );
+      // Rejected before dispatch: the operation itself never ran.
+      expect(caller).not.toHaveBeenCalled();
     } finally {
       await close();
     }

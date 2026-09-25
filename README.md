@@ -176,12 +176,15 @@ await server.startStdio();
 - **`execute_typescript({ code })`** runs a short TypeScript program in an isolated QuickJS sandbox
   (`@mastra/quickjs`, another optional peer — no native binary, no filesystem/network/process
   access beyond the injected `external_*` functions). Batch several operations into one round trip
-  with `Promise.all` instead of one tool call each. Killed after 30 seconds.
+  with `Promise.all` instead of one tool call each. Killed after 30 seconds. `@mastra/quickjs` is
+  loaded on the first `execute_typescript` call, so a server that never runs one (or uses the
+  `full` surface) does not need it installed.
 
 Every `external_*` call resolves to the exact same `createUpapiTools(options)` tool object the
 `full` surface (below) calls — there is no second auth path. A denied or failed operation call
 surfaces **inside the sandbox** as a thrown `Error("<CODE>: <message>")`, so the guest program's
-own `try`/`catch` can inspect and branch on the code; that is separate from a malformed
+own `try`/`catch` can inspect and branch on the code; arguments that fail an operation's input
+schema throw `INVALID_INPUT: <details>` the same way. That is separate from a malformed
 `execute_typescript` **input**, which fails the call itself before the sandbox ever starts.
 
 Set `MCP_TOOL_SURFACE` (or pass `surface`) to change what is advertised:
