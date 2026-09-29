@@ -508,8 +508,13 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
   // ── Inbox thread open, side effect unmeasured (1) ─────────────────────────
   'wellfound-conversation-detail.post': INBOX_THREAD_OPEN,
 
-  // ── Publishes content under the caller's own account (1) ──────────────────
+  // ── Publishes content under the caller's own account (2) ──────────────────
   'reddit-oauth-post-comment.post': PUBLIC_POST_WRITE,
+  // Posts a comment on a Facebook post via mbasic.facebook.com using the
+  // caller's own session cookies (`c_user`/`xs`) — publishes content, is not
+  // idempotent (a repeat call posts a second comment), so it earns the same
+  // write annotation as the Reddit comment op above.
+  'facebook-post-comment.post': PUBLIC_POST_WRITE,
 
   // ── Local pure compute, no network (2) ────────────────────────────────────
   'text-analyze.post': LOCAL_COMPUTE,

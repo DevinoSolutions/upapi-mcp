@@ -153,6 +153,11 @@ describe('every tool declares how it behaves', () => {
       'email-read-verification-code-graph.post',
       'email-read-verification-code.post',
       'email-read-verification-link.post',
+      // Posts a comment on a Facebook post under the caller's own session
+      // cookies — publishes content in the open world under a person's name, so
+      // it is a writer like reddit-oauth-post-comment.post below. `Social Media`
+      // is directory-excluded, so a connector host never sees it (WITHHELD).
+      'facebook-post-comment.post',
       'instagram-check-account.post',
       // The only published operation that puts content into the open world under
       // a person's name. It is here rather than in the listed-writer carve-out
@@ -545,7 +550,15 @@ describe('the hosted surface is scoped to what a directory may advertise', () =>
     // surface the moment it lands. WITHHELD is unchanged at 56. **LISTED moved, so
     // the marketplace listing copy that quotes this number needs the edit that goes
     // with it.**
+    // 2026-09-29: withheld 56→57 (`facebook-post-comment.post`, the Facebook
+    // mbasic comment writer from the account-automation port). It is categorized
+    // `Social Media`, so the CATEGORY filter withheld it the moment it landed with
+    // nobody editing the exclusion list — and here that filter is load-bearing
+    // rather than merely conservative, because it is a writer that publishes
+    // content in the open world under a person's name (it also joins the
+    // exhaustive writers list above). **LISTED did not move, so no listing or
+    // submission copy needs an edit for this change.**
     expect(LISTED).toHaveLength(44);
-    expect(WITHHELD).toHaveLength(56);
+    expect(WITHHELD).toHaveLength(57);
   });
 });
