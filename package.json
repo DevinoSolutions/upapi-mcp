@@ -67,7 +67,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@upapi/sdk": "^0.2.0",
     "zod": "^3.25.0"
   },
@@ -95,6 +95,6 @@
     "rimraf": "^6.0.1",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "typescript-7": "npm:typescript@7.0.2",
-    "vitest": "^4.1.6"
+    "vitest": "^4.1.11"
   }
 }
