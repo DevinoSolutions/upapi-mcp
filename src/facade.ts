@@ -236,14 +236,19 @@ type SearchMatch = {
  */
 function scoreOperation(spec: UpapiToolSpec, terms: string[]): number {
   if (terms.length === 0) return 1;
+  const perTerm = termScores(spec, terms);
+  return perTerm.includes(0) ? 0 : perTerm.reduce((sum, value) => sum + value, 0);
+}
+
+/** Each term's best score against one operation; 0 where the term hits nothing. */
+function termScores(spec: UpapiToolSpec, terms: string[]): number[] {
   const slug = spec.slug.toLowerCase();
   const title = spec.title.toLowerCase();
   const summary = spec.summary.toLowerCase();
   const category = spec.category.toLowerCase();
   const tags = spec.tags.map((tag) => tag.toLowerCase());
 
-  let total = 0;
-  for (const term of terms) {
+  return terms.map((term) => {
     let best = 0;
     if (slug === term) best = 100;
     else if (slug.includes(term)) best = Math.max(best, 40);
@@ -251,16 +256,107 @@ function scoreOperation(spec: UpapiToolSpec, terms: string[]): number {
     if (tags.some((tag) => tag.includes(term))) best = Math.max(best, 20);
     if (category.includes(term)) best = Math.max(best, 15);
     if (summary.includes(term)) best = Math.max(best, 10);
-    if (best === 0) return 0;
-    total += best;
+    return best;
+  });
+}
+
+/**
+ * Words that carry no intent in a sentence-shaped query. Dropped ONLY for the
+ * closest-match fallback, where a filler word that happens to sit inside some
+ * summary ("a", "the", "com" from a pasted URL) would otherwise count as a hit.
+ *
+ * The HTTP verbs and catalogue words are here because every slug ends in one:
+ * counted, a guessed `screenshot.get` half-matched all 71 `.get` operations and
+ * `post to mastodon` every `.post` one, with screenshot.post nowhere in the top ten.
+ */
+const FALLBACK_IGNORED_TERMS = new Set([
+  'get',
+  'post',
+  'put',
+  'patch',
+  'delete',
+  'api',
+  'apis',
+  'endpoint',
+  'operation',
+  'operations',
+  'the',
+  'and',
+  'for',
+  'with',
+  'from',
+  'that',
+  'this',
+  'into',
+  'onto',
+  'about',
+  'please',
+  'can',
+  'you',
+  'your',
+  'how',
+  'what',
+  'which',
+  'want',
+  'need',
+  'use',
+  'using',
+  'take',
+  'make',
+  'give',
+  'show',
+  'tell',
+  'find',
+  'some',
+  'any',
+  'http',
+  'https',
+  'www',
+  'com',
+  'org',
+  'net',
+]);
+
+/**
+ * The closest matches when no operation matches every term.
+ *
+ * WHY. Agents phrase searches as sentences ("take a full-page screenshot of a web
+ * page") or paste the URL they are working on, and one word that appears in no
+ * operation made the strict search return nothing — after which the copilot told
+ * a user that upAPI has no screenshot operation (eval run 37600000199,
+ * 2026-10-07). Strict matching stays the first answer whenever it finds
+ * anything, so "github issues" still narrows to issue operations; this runs only
+ * on an empty strict result, ranks by how many meaningful words matched, and
+ * keeps only operations that matched at least half of them, so one shared word
+ * cannot surface the whole catalog.
+ */
+function closestSpecs(
+  specs: readonly UpapiToolSpec[],
+  terms: string[],
+): Array<{ spec: UpapiToolSpec; matched: number; score: number }> {
+  // Deduplicated, so "a web page ... the page" cannot count one word twice.
+  const meaningful = [
+    ...new Set(terms.filter((term) => term.length >= 3 && !FALLBACK_IGNORED_TERMS.has(term))),
+  ];
+  if (meaningful.length === 0) return [];
+  const needed = Math.ceil(meaningful.length / 2);
+  const ranked: Array<{ spec: UpapiToolSpec; matched: number; score: number }> = [];
+  for (const spec of specs) {
+    const perTerm = termScores(spec, meaningful);
+    const matched = perTerm.filter((value) => value > 0).length;
+    if (matched >= needed) {
+      ranked.push({ spec, matched, score: perTerm.reduce((sum, value) => sum + value, 0) });
+    }
   }
-  return total;
+  return ranked.sort(
+    (a, b) => b.matched - a.matched || b.score - a.score || a.spec.slug.localeCompare(b.spec.slug),
+  );
 }
 
 function searchSpecs(
   specs: readonly UpapiToolSpec[],
   args: { query: string; category?: string; limit: number },
-): { total: number; matches: SearchMatch[] } {
+): { total: number; matches: SearchMatch[]; matchedEveryTerm: boolean } {
   const terms = args.query
     .toLowerCase()
     .split(/[^a-z0-9]+/i)
@@ -277,9 +373,12 @@ function searchSpecs(
   const exactSlug = args.query.trim().toLowerCase();
   const wantedCategory = args.category?.trim().toLowerCase();
 
+  const inCategory = wantedCategory
+    ? specs.filter((spec) => spec.category.toLowerCase() === wantedCategory)
+    : specs;
+
   const scored: Array<{ spec: UpapiToolSpec; score: number; exact: boolean }> = [];
-  for (const spec of specs) {
-    if (wantedCategory && spec.category.toLowerCase() !== wantedCategory) continue;
+  for (const spec of inCategory) {
     const score = scoreOperation(spec, terms);
     if (score > 0) scored.push({ spec, score, exact: spec.slug.toLowerCase() === exactSlug });
   }
@@ -292,9 +391,15 @@ function searchSpecs(
       a.spec.slug.localeCompare(b.spec.slug),
   );
 
+  const matchedEveryTerm = scored.length > 0 || terms.length === 0;
+  const ranked: ReadonlyArray<{ spec: UpapiToolSpec }> = matchedEveryTerm
+    ? scored
+    : closestSpecs(inCategory, terms);
+
   return {
-    total: scored.length,
-    matches: scored.slice(0, args.limit).map(({ spec }) => ({
+    total: ranked.length,
+    matchedEveryTerm,
+    matches: ranked.slice(0, args.limit).map(({ spec }) => ({
       slug: spec.slug,
       title: spec.title,
       description: clip(spec.summary),
@@ -303,6 +408,17 @@ function searchSpecs(
       parameters: summarizeParameters(spec.inputSchema),
     })),
   };
+}
+
+/** What the agent should do next, given how the search went. */
+function searchNextStep(returned: number, matchedEveryTerm: boolean): string {
+  if (returned === 0) {
+    return 'No operation matched. Try fewer or broader words, or an empty query to browse everything.';
+  }
+  const run = `Run one with ${CALL_OP_TOOL_NAME}: { "slug": "<slug>", "input": { … } }`;
+  return matchedEveryTerm
+    ? run
+    : `No operation matched every word, so these are the closest matches, most words first. Check a description fits before you call it. ${run}`;
 }
 
 function readSearchArgs(input: unknown): { query: string; category?: string; limit: number } {
@@ -342,16 +458,14 @@ export function createFacadeEntries(specs: readonly UpapiToolSpec[]): {
     annotations: SEARCH_ANNOTATIONS,
     call: async (input: unknown): Promise<ToolCallResult> => {
       const args = readSearchArgs(input);
-      const { total, matches } = searchSpecs(specs, args);
+      const { total, matches, matchedEveryTerm } = searchSpecs(specs, args);
       const payload = {
         matches,
         returned: matches.length,
         total,
+        matchedEveryTerm,
         categories,
-        next:
-          matches.length === 0
-            ? 'No operation matched. Try fewer or broader words, or an empty query to browse everything.'
-            : `Run one with ${CALL_OP_TOOL_NAME}: { "slug": "<slug>", "input": { … } }`,
+        next: searchNextStep(matches.length, matchedEveryTerm),
       };
       return { content: [{ type: 'text' as const, text: JSON.stringify(payload, null, 2) }] };
     },

@@ -185,8 +185,10 @@ const executeTypescriptInputSchema = z.object({
 
 /**
  * Substring scoring over the fields an author already wrote — the same shape
- * `scoreOperation` in `facade.ts` uses for `search_ops`, so the two surfaces
- * behave consistently for the same query. Not imported from there: that
+ * `scoreOperation` in `facade.ts` uses for `search_ops`'s strict pass. Unlike
+ * `search_ops`, an empty result here does NOT fall back to the closest matches
+ * (`closestSpecs`), so a sentence-shaped query can find nothing here that
+ * `search_ops` would answer. Not imported from there: that
  * function is private to the module whose tests pin its ranking, and
  * `search_tools` only needs a match/no-match decision, not a ranked score.
  */

@@ -126,6 +126,7 @@ describe('search_ops discovers exactly what this connection may run', () => {
       matches: Array<{ slug: string; category: string; unitWeight: number; parameters: unknown[] }>;
       total: number;
       returned: number;
+      matchedEveryTerm: boolean;
       categories: string[];
     };
   }
@@ -178,9 +179,56 @@ describe('search_ops discovers exactly what this connection may run', () => {
     expect(payload.next).toContain('broader');
   });
 
-  it('requires every term to match, so a search stays a search', async () => {
-    const both = await search({ query: 'github zzzzznope', limit: 50 });
-    expect(both.total).toBe(0);
+  it('narrows by every term whenever some operation matches them all', async () => {
+    const strict = await search({ query: 'github repo', limit: 50 });
+    expect(strict.matchedEveryTerm).toBe(true);
+    expect(strict.matches[0]?.slug).toContain('github-repo');
+    // Narrowed: far fewer than the whole served catalog.
+    expect(strict.total).toBeLessThan(LISTED.length / 4);
+  });
+
+  it('falls back to the closest matches for a sentence-shaped query, and says so', async () => {
+    // 2026-10-07: one word in no operation made the strict search empty, and the
+    // copilot told a user the catalog had no such operation.
+    const result = await callTool(SEARCH_OPS_TOOL_NAME, {
+      query: 'please show me the stars of a github repository at https://github.com/x/y',
+    });
+    const payload = JSON.parse(result.content[0]!.text) as {
+      matches: Array<{ slug: string }>;
+      matchedEveryTerm: boolean;
+      next: string;
+    };
+    expect(payload.matchedEveryTerm).toBe(false);
+    expect(payload.matches[0]?.slug).toBe('github-repo.get');
+    expect(payload.next).toContain('closest matches');
+  });
+
+  it('keeps a fallback match to operations sharing at least half the meaningful words', async () => {
+    const half = await search({ query: 'github zzzzznope', limit: 50 });
+    expect(half.matchedEveryTerm).toBe(false);
+    // A word that matches nothing never widens the result beyond what the words
+    // that did match find on their own.
+    const githubAlone = await search({ query: 'github', limit: 50 });
+    expect(half.total).toBeGreaterThan(0);
+    expect(half.matches.map((m) => m.slug).sort()).toEqual(
+      githubAlone.matches.map((m) => m.slug).sort(),
+    );
+
+    const third = await search({ query: 'github zzzzznope qqqqqnope', limit: 50 });
+    expect(third.total).toBe(0);
+  });
+
+  it('does not let a verb suffix every slug carries count as a match', async () => {
+    // Measured before the fix: `screenshot.get` returned 71 `.get` operations with
+    // screenshot.post outside the top ten; `get unicorns` returned 70.
+    const guessedSuffix = await search({ query: 'screenshot.get', limit: 10 });
+    expect(guessedSuffix.matchedEveryTerm).toBe(false);
+    expect(guessedSuffix.matches[0]?.slug).toBe('screenshot.post');
+
+    const verbOnly = await search({ query: 'get zzzzznope', limit: 10 });
+    expect(verbOnly.total).toBe(0);
+    const postOnly = await search({ query: 'post to zzzzznope', limit: 10 });
+    expect(postOnly.total).toBe(0);
   });
 });
 
