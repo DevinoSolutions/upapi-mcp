@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { OPERATIONS } from '@upapi/sdk';
-import { createUpapiToolSpecs, isDirectoryListedOperation, type Caller } from '../tools.js';
+import { createUpapiToolSpecs, type Caller } from '../tools.js';
 import { ALWAYS_ON_SLUGS, CALL_OP_TOOL_NAME, SEARCH_OPS_TOOL_NAME } from '../facade.js';
 import { handleUpapiMcpRequest, resolveToolMode } from '../http.js';
 
@@ -9,15 +9,12 @@ import { handleUpapiMcpRequest, resolveToolMode } from '../http.js';
  *
  * Two properties carry the whole feature and are asserted here rather than
  * described: the table stays small enough to re-send every turn, and it can
- * reach EXACTLY what the per-op table could reach — no more (a withheld
- * operation stays withheld when named through `call_op`) and no less (an
- * unlisted-but-served operation is still callable).
+ * reach EXACTLY what the per-op table could reach — no more (an operation a
+ * host filter removed stays removed when named through `call_op`) and no less
+ * (an unlisted-but-served operation is still callable).
  */
 
 const noopCaller: Caller = vi.fn(async () => ({ ok: true }));
-
-const LISTED = OPERATIONS.filter(isDirectoryListedOperation);
-const WITHHELD = OPERATIONS.filter((op) => !isDirectoryListedOperation(op));
 
 function rpc(body: unknown, search = ''): Request {
   return new Request(`https://app.upapi.io/api/mcp${search}`, {
@@ -69,7 +66,7 @@ describe('the default table is compact', () => {
     expect(names[0]).toBe(SEARCH_OPS_TOOL_NAME);
     expect(names).toContain(CALL_OP_TOOL_NAME);
     expect(names).toHaveLength(2 + ALWAYS_ON_SLUGS.length);
-    expect(names.length).toBeLessThan(LISTED.length);
+    expect(names.length).toBeLessThan(OPERATIONS.length);
   });
 
   it('keeps the whole tools/list response under the context budget', async () => {
@@ -88,21 +85,18 @@ describe('the default table is compact', () => {
   });
 
   it('only makes always-on an operation this surface already serves', () => {
-    // The facade must never widen the table. `reddit-search-posts.get` is the
-    // standing temptation here — high demand, and withheld by category.
+    // The facade must never widen the table: every always-on slug is a catalog
+    // operation, and a host filter that removes one removes it from here too.
     for (const slug of ALWAYS_ON_SLUGS) {
-      expect(LISTED.map((op) => op.slug)).toContain(slug);
-    }
-    for (const op of WITHHELD) {
-      expect(ALWAYS_ON_SLUGS).not.toContain(op.slug);
+      expect(OPERATIONS.map((op) => op.slug)).toContain(slug);
     }
   });
 });
 
 describe('?tools=full serves the original per-op table', () => {
-  it('lists one tool per directory-listed operation and no meta-tools', async () => {
+  it('lists one tool per public operation and no meta-tools', async () => {
     const { tools } = await listTools('?tools=full');
-    expect(tools.map((t) => t.name).sort()).toEqual(LISTED.map((op) => op.operationId).sort());
+    expect(tools.map((t) => t.name).sort()).toEqual(OPERATIONS.map((op) => op.operationId).sort());
   });
 
   it('reads the mode off the request URL, defaulting to compact', () => {
@@ -146,29 +140,27 @@ describe('search_ops discovers exactly what this connection may run', () => {
 
   it('browses the whole served catalog on an empty query', async () => {
     const found = await search({ query: '', limit: 50 });
-    expect(found.total).toBe(LISTED.length);
+    expect(found.total).toBe(OPERATIONS.length);
   });
 
-  it('never surfaces a withheld operation, however it is queried', async () => {
-    // The directory exclusion has to survive discovery, or the facade becomes
-    // the index for the very categories the surface withholds.
-    const found = await search({ query: '', limit: 50 });
-    const slugs = found.matches.map((m) => m.slug);
-    for (const op of WITHHELD) {
-      expect(slugs).not.toContain(op.slug);
-    }
+  it('discovers an operation the old directory gate withheld', async () => {
+    // Social Media was withheld from this surface until 2026-09-26. Discovery
+    // has to reach it now, or the facade would still be hiding what the owner
+    // decided to list.
+    const found = await search({ query: 'reddit comment', limit: 50 });
+    expect(found.matches.map((m) => m.slug)).toContain('reddit-oauth-post-comment.post');
   });
 
   it('inherits a host filter, so it can never out-list the tool table', async () => {
-    const only = LISTED[0]!;
+    const only = OPERATIONS[0]!;
     const found = await search({ query: '', limit: 50 }, { filter: (op) => op.slug === only.slug });
     expect(found.matches.map((m) => m.slug)).toEqual([only.slug]);
   });
 
   it('honors the category filter and the limit', async () => {
-    const found = await search({ query: '', category: LISTED[0]!.category, limit: 2 });
+    const found = await search({ query: '', category: OPERATIONS[0]!.category, limit: 2 });
     expect(found.returned).toBeLessThanOrEqual(2);
-    for (const match of found.matches) expect(match.category).toBe(LISTED[0]!.category);
+    for (const match of found.matches) expect(match.category).toBe(OPERATIONS[0]!.category);
   });
 
   it('answers an unmatched query with an empty list and a way forward, not an error', async () => {
@@ -184,7 +176,7 @@ describe('search_ops discovers exactly what this connection may run', () => {
     expect(strict.matchedEveryTerm).toBe(true);
     expect(strict.matches[0]?.slug).toContain('github-repo');
     // Narrowed: far fewer than the whole served catalog.
-    expect(strict.total).toBeLessThan(LISTED.length / 4);
+    expect(strict.total).toBeLessThan(OPERATIONS.length / 4);
   });
 
   it('falls back to the closest matches for a sentence-shaped query, and says so', async () => {
@@ -235,7 +227,7 @@ describe('search_ops discovers exactly what this connection may run', () => {
 describe('call_op is the per-op path, reached by slug', () => {
   it('executes through the same caller with the same slug and input', async () => {
     const caller = vi.fn(async () => ({ stars: 1 }));
-    const target = LISTED[0]!;
+    const target = OPERATIONS[0]!;
     const result = await callTool(
       CALL_OP_TOOL_NAME,
       { slug: target.slug, input: { a: 1 } },
@@ -247,17 +239,18 @@ describe('call_op is the per-op path, reached by slug', () => {
 
   it('substitutes an empty input when the agent sends none', async () => {
     const caller = vi.fn(async () => ({}));
-    const target = LISTED[0]!;
+    const target = OPERATIONS[0]!;
     await callTool(CALL_OP_TOOL_NAME, { slug: target.slug }, { caller });
     expect(caller).toHaveBeenCalledWith(target.slug, {});
   });
 
-  it('refuses a withheld operation with the same NOT_FOUND the per-op path gives', async () => {
+  it('refuses a host-filtered operation with the same NOT_FOUND the per-op path gives', async () => {
     const caller = vi.fn(async () => ({ leaked: true }));
-    const hidden = WITHHELD[0]!;
+    const [kept, hidden] = OPERATIONS;
+    const filter = (op: { slug: string }) => op.slug === kept!.slug;
 
-    const viaFacade = await callTool(CALL_OP_TOOL_NAME, { slug: hidden.slug }, { caller });
-    const viaName = await callTool(hidden.operationId, {}, { caller });
+    const viaFacade = await callTool(CALL_OP_TOOL_NAME, { slug: hidden!.slug }, { caller, filter });
+    const viaName = await callTool(hidden!.operationId, {}, { caller, filter });
 
     expect(caller).not.toHaveBeenCalled();
     expect(viaFacade.isError).toBe(true);
@@ -279,7 +272,7 @@ describe('call_op is the per-op path, reached by slug', () => {
         retryAfterSeconds: 60,
       });
     });
-    const result = await callTool(CALL_OP_TOOL_NAME, { slug: LISTED[0]!.slug }, { caller });
+    const result = await callTool(CALL_OP_TOOL_NAME, { slug: OPERATIONS[0]!.slug }, { caller });
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toContain('RATE_LIMITED');
     expect(result.content[0]?.text).toContain('Retry after 60 seconds');
@@ -289,7 +282,7 @@ describe('call_op is the per-op path, reached by slug', () => {
     // Compact is a context-budget decision, not an access decision: the access
     // decision is the served set, and it is identical in both modes.
     const caller = vi.fn(async () => ({ ok: true }));
-    const unlisted = LISTED.find((op) => !ALWAYS_ON_SLUGS.includes(op.slug))!;
+    const unlisted = OPERATIONS.find((op) => !ALWAYS_ON_SLUGS.includes(op.slug))!;
     const result = await callTool(unlisted.operationId, {}, { caller });
     expect(result.isError).toBeUndefined();
     expect(caller).toHaveBeenCalledWith(unlisted.slug, {});
@@ -324,10 +317,7 @@ describe('annotations state what the meta-tools do', () => {
   it('holds the one claim call_op makes about contents: nothing reachable is destructive', () => {
     // `destructiveHint: false` on the dispatcher is only honest while this is
     // true of every operation it can reach.
-    for (const spec of createUpapiToolSpecs({
-      caller: noopCaller,
-      filter: isDirectoryListedOperation,
-    })) {
+    for (const spec of createUpapiToolSpecs({ caller: noopCaller })) {
       expect(spec.annotations.destructiveHint, spec.slug).toBe(false);
     }
   });
@@ -346,7 +336,7 @@ describe('authorization narrows the table, in both modes', () => {
 
   it('refuses execution by any route when execute rights are absent', async () => {
     const caller = vi.fn(async () => ({ leaked: true }));
-    const target = LISTED[0]!;
+    const target = OPERATIONS[0]!;
     for (const attempt of [
       callTool(CALL_OP_TOOL_NAME, { slug: target.slug }, { caller, canExecute: false }),
       callTool(target.operationId, {}, { caller, canExecute: false }),

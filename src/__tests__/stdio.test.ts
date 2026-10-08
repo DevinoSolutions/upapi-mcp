@@ -3,8 +3,9 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { OPERATIONS } from '@upapi/sdk';
 import { createUpapiStdioServer, resolveStdioToolMode } from '../stdio.js';
-import { isDirectoryListedOperation, type Caller } from '../tools.js';
+import type { Caller } from '../tools.js';
 import { CALL_OP_TOOL_NAME } from '../facade.js';
+import { DIRECTORY_FLAGSHIP_SLUGS } from '../directory.js';
 
 /**
  * The stdio surface, driven through a REAL MCP client over an in-memory pair of
@@ -51,7 +52,7 @@ describe('createUpapiStdioServer with no explicit mode', () => {
     try {
       const { tools } = await client.listTools();
       // compact: search_ops + call_op + the always-on operations — nowhere near
-      // one tool per operation, and NOT the withheld directory-mode subset either.
+      // one tool per operation, and NOT the curated directory-mode set either.
       expect(tools.length).toBeLessThan(OPERATIONS.length);
       expect(tools.map((tool) => tool.name)).toContain(CALL_OP_TOOL_NAME);
     } finally {
@@ -81,16 +82,14 @@ describe('the stdio server puts annotations on the wire', () => {
     }
   });
 
-  it('serves the whole catalog in full mode and the withheld-free flagship set in directory mode', async () => {
+  it('advertises exactly the curated flagship set in directory mode', async () => {
     const { client, close } = await connect('directory');
     try {
       const { tools } = await client.listTools();
-      const withheld = new Set(
-        OPERATIONS.filter((op) => !isDirectoryListedOperation(op)).map((op) => op.operationId),
+      const flagship = OPERATIONS.filter((op) => DIRECTORY_FLAGSHIP_SLUGS.includes(op.slug)).map(
+        (op) => op.operationId,
       );
-      expect(tools.length).toBeGreaterThan(0);
-      expect(tools.length).toBeLessThan(OPERATIONS.length);
-      expect(tools.map((tool) => tool.name).filter((name) => withheld.has(name))).toEqual([]);
+      expect(tools.map((tool) => tool.name).sort()).toEqual([...flagship].sort());
     } finally {
       await close();
     }
@@ -131,7 +130,7 @@ describe('the stdio server puts annotations on the wire', () => {
     try {
       const { tools } = await client.listTools();
       expect(tools.map((tool) => tool.name)).not.toContain(CALL_OP_TOOL_NAME);
-      const first = OPERATIONS.find(isDirectoryListedOperation);
+      const first = OPERATIONS.find((op) => !DIRECTORY_FLAGSHIP_SLUGS.includes(op.slug));
       expect(first).toBeDefined();
       const result = (await client.callTool({
         name: CALL_OP_TOOL_NAME,

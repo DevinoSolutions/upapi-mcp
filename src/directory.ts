@@ -18,9 +18,10 @@ import type { UpapiToolSpec } from './tools.js';
  * are correct for their audience, so both exist and neither is deleted.
  *
  * Nothing here can widen the surface. Entries are built from the SAME
- * `UpapiToolSpec` objects every other mode lists, so metering, gating, error
- * rendering, and the withheld-category exclusion are byte-identical, and a slug
- * this transport does not serve is simply absent rather than resurrected.
+ * `UpapiToolSpec` objects every other mode lists, so metering, gating and error
+ * rendering are byte-identical, and a slug this transport does not serve (a host
+ * filter removed it, or the catalog dropped it) is simply absent rather than
+ * resurrected.
  */
 
 /**
@@ -88,9 +89,9 @@ export type DirectoryEntries = {
 /**
  * The flagship tools this transport can actually serve, partitioned read/write.
  *
- * `specs` is already filtered (directory exclusions, then any host filter), so
- * a flagship slug the transport withholds is absent by construction rather than
- * by re-applying the same rules here and risking a different answer.
+ * `specs` is already filtered by any host filter, so a flagship slug the
+ * transport does not serve is absent by construction rather than by re-applying
+ * the same rule here and risking a different answer.
  */
 export function createDirectoryEntries(specs: readonly UpapiToolSpec[]): DirectoryEntries {
   const bySlug = new Map(specs.map((spec) => [spec.slug, spec]));

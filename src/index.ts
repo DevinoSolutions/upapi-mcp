@@ -5,8 +5,8 @@
  *
  *  - **Local (stdio)** — `createUpapiStdioServer` + the `upapi-mcp` bin.
  *    Forwards to api.upapi.io with the user's `upapi_` key; the key is validated
- *    at the gateway, never here. Reaches the whole catalog, unlike the hosted
- *    transport's directory-mode exclusion, and defaults to the same compact
+ *    at the gateway, never here. Reaches the whole catalog, and defaults to the
+ *    same compact
  *    `search_ops`/`call_op` facade the hosted transport defaults to
  *    (`UPAPI_TOOL_MODE`, rollback `full`). Mastra bindings for the same table
  *    live behind the `@upapi/mcp/mastra` subpath, whose peer dependencies are
@@ -14,15 +14,15 @@
  *    installed.
  *  - **Hosted (HTTP)** — `handleUpapiMcpRequest`, mounted by the web app behind
  *    its own better-auth OAuth. Tool execution runs in-process through the same
- *    invocation + metering path the try-it panel uses. This is the surface AI
- *    directories list, so it serves a NARROWER table: see
- *    `DIRECTORY_EXCLUDED_CATEGORIES`. It also serves a SMALLER one by default —
- *    the compact `search_ops`/`call_op` facade, with the per-op table behind
- *    `?tools=full` and the curated, named, read/write-separated directory
- *    listing behind `?tools=directory`.
+ *    invocation + metering path the try-it panel uses. It serves the same whole
+ *    catalog (since 2026-09-26; it used to withhold Social Media and Utility),
+ *    and advertises a SMALLER table by default — the compact
+ *    `search_ops`/`call_op` facade, with the per-op table of every public
+ *    operation behind `?tools=full` and the curated, named, read/write-separated
+ *    directory listing behind `?tools=directory`.
  *
  * Both get their operations from @upapi/sdk's generated catalog and differ only
- * in the injected `Caller` and in that listing scope.
+ * in the injected `Caller`.
  */
 /**
  * The catalog the tool table is built from, re-exported so a consumer can write
@@ -33,8 +33,6 @@ export { OPERATIONS, type OperationMeta } from '@upapi/sdk';
 
 export {
   createUpapiToolSpecs,
-  DIRECTORY_EXCLUDED_CATEGORIES,
-  isDirectoryListedOperation,
   OPERATION_ANNOTATIONS,
   type Caller,
   type CreateToolsOptions,

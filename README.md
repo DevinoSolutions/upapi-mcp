@@ -104,11 +104,15 @@ slug's verb suffix. Operations are named after their slug with `.` and `-` repla
 (formats, bounds, defaults, nullability), because that schema is generated from the worker's own
 model and passed through untouched.
 
-The local (stdio) server reaches the whole catalog in `compact` and `full` mode — it is installed
-deliberately, with your own key, into a client you chose. Its `directory` mode applies the same
-withheld-category exclusion the hosted endpoint's `directory` mode does, since that mode is what a
-public listing (like the Claude Desktop Extension) advertises to someone who has not made that
-choice yet.
+The hosted server reaches the whole public catalog in every mode; since 2026-09-26 it
+withholds no category. The local (stdio) server and the Desktop Extension catch up in the next
+release: the published 0.2.0 bundles 63 operations and still withholds Social Media and Utility in
+`directory` mode.
+
+<!-- TODO(mcp-release, 2026-10-08): drop the qualifier after @upapi/mcp 0.3.0 ships (order: sdk → mirror --only mcp → mcp → registry → mcpb → GH release) -->
+
+`directory` mode only changes what is ADVERTISED — the
+curated flagship set a public listing (like the Claude Desktop Extension) shows.
 
 Descriptions carry the quota cost, so an agent can budget:
 

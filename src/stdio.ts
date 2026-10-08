@@ -1,11 +1,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import {
-  createUpapiToolSpecs,
-  isDirectoryListedOperation,
-  type CreateToolsOptions,
-} from './tools.js';
+import { createUpapiToolSpecs, type CreateToolsOptions } from './tools.js';
 import {
   createFacadeEntries,
   toolNotFound,
@@ -69,20 +65,13 @@ export function resolveStdioToolMode(env: NodeJS.ProcessEnv = process.env): McpT
 /**
  * An MCP server over stdio exposing upAPI's operations.
  *
- * `directory` mode additionally applies the hosted transport's withheld-category
- * exclusion. That exclusion is about what a PUBLIC LISTING advertises to someone
- * who clicked "install", which is precisely what a directory-mode stdio server
- * is — unlike `full`/`compact`, which a developer wires up deliberately with
- * their own key and which therefore keep serving the whole catalog.
+ * Every mode serves the whole catalog, as the hosted transport does since
+ * 2026-09-26; `directory` differs only in what it ADVERTISES (the curated
+ * flagship set — see `directory.ts`).
  */
 export function createUpapiStdioServer(options: CreateStdioServerOptions): Server {
   const mode = options.mode ?? 'compact';
-  const specs = createUpapiToolSpecs({
-    ...options,
-    filter: (op) =>
-      (mode === 'directory' ? isDirectoryListedOperation(op) : true) &&
-      (options.filter?.(op) ?? true),
-  });
+  const specs = createUpapiToolSpecs(options);
   const byName = new Map(specs.map((spec) => [spec.name, spec]));
   const { search, call } = createFacadeEntries(specs);
   const listed = selectListedTools(specs, { mode, canExecute: true, canSearch: true });

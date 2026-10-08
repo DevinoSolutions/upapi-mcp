@@ -30,58 +30,6 @@ export type Caller = (slug: string, input: unknown) => Promise<unknown>;
 /** Narrows the tool table, e.g. to one category. Return false to omit an op. */
 export type ToolFilter = (op: OperationMeta) => boolean;
 
-/**
- * Categories the HOSTED endpoint does not expose.
- *
- * This is listing scope, not a capability judgement: every one of these
- * operations stays in the product — on the REST gateway, in the try-it panel,
- * and on the keyed stdio server a developer installs deliberately. What changes
- * is only what an AI directory advertises to anyone who clicks "connect".
- *
- *  - **Social Media** — profile, post and commenter reads across Instagram,
- *    LinkedIn, TikTok, Reddit, Bluesky and Mastodon. They return third parties'
- *    personal data to an agent that reached them through a public directory, and
- *    several platforms' terms disallow the collection outright. That is a
- *    different bargain from a developer wiring the same operation into their own
- *    system with their own key, which is why the stdio surface keeps them.
- *  - **Utility** — the email-signup primitives: the two `email-read-verification-*`
- *    reads, plus (2026-09-22) `email-generate-address.post` and
- *    `email-read-verification-code-graph.post`, the outlook.com/Graph twin of the
- *    IMAP reader. In a CI harness reading a signup code out of an inbox, or minting
- *    a throwaway address, is ordinary QA plumbing; in a directory listing the same
- *    four operations ARE the bulk-account-creation primitive, and they read that
- *    way to a reviewer no matter what we intended.
- *
- * A CATEGORY list, not a slug list, on purpose: a new social operation added to
- * the catalog tomorrow is excluded the moment it lands, with nobody having to
- * remember this file exists. `packages/mcp/src/__tests__/tools.test.ts` pins the
- * resulting set so the exposed surface cannot drift silently either way.
- */
-export const DIRECTORY_EXCLUDED_CATEGORIES: readonly string[] = ['Social Media', 'Utility'];
-
-/**
- * Slug-level companions to the category list, for operations whose catalog
- * category does not reflect why a directory must not advertise them.
- * `linkedin-profile-search.post` is a keyed-session people-search over a
- * professional network — exactly the personal-data bargain the Social Media
- * exclusion exists to refuse — but it is categorized `Search`, so the category
- * filter cannot catch it. Recategorizing it in the worker manifest would also
- * work, but that changes every catalog surface (marketplace grouping, landing
- * counts, seeded mirror) for what is a directory-only concern.
- * `github-user-emails.get` is the same shape: it reads a person's email
- * addresses off their public commits, and it is categorized `Developer Tools`,
- * so the category filter cannot catch it either.
- */
-export const DIRECTORY_EXCLUDED_SLUGS: readonly string[] = [
-  'linkedin-profile-search.post',
-  'github-user-emails.get',
-];
-
-/** True when an operation belongs on the hosted, directory-listed surface. */
-export const isDirectoryListedOperation: ToolFilter = (op) =>
-  !DIRECTORY_EXCLUDED_CATEGORIES.includes(op.category) &&
-  !DIRECTORY_EXCLUDED_SLUGS.includes(op.slug);
-
 export type CreateToolsOptions = {
   caller: Caller;
   filter?: ToolFilter | undefined;
@@ -109,7 +57,7 @@ export type McpToolAnnotations = {
 };
 
 /**
- * The six behavioural classes the 95 published operations fall into.
+ * The six behavioural classes the 100 published operations fall into.
  *
  * `openWorldHint` is `true` in five of the six, and that is not a shortcut: upAPI is
  * an API marketplace, so EVERY published operation exists to reach a system
@@ -126,7 +74,7 @@ export type McpToolAnnotations = {
 
 /**
  * A plain lookup: the worker reads a third-party endpoint and writes nothing
- * anywhere. 89 of the 95 published operations.
+ * anywhere. Most of the published operations.
  *
  * `readOnlyHint` here is derived from what the worker actually DOES, never from
  * the slug's `.get`/`.post` suffix. That suffix names the operation's verb on
@@ -140,8 +88,9 @@ export type McpToolAnnotations = {
  * operations POST upstream to CHANGE something and are classified separately
  * below: `instagram_check_account.py` and `audio_transcribe.py` (job
  * submission). The other POST-ing workers there — account creation, login,
- * comment posting, messaging — are absent from the catalog, so no tool exists
- * for them on any transport.
+ * messaging, and any comment poster other than `reddit-oauth-post-comment.post`
+ * (which IS published, see PUBLIC_POST_WRITE) — are absent from the catalog, so
+ * no tool exists for them on any transport.
  *
  * SINCE 2026-09-07 THE HTTP VERB ALONE NO LONGER SEPARATES THOSE TWO SETS. The
  * Wellfound operations speak persisted GraphQL, so every one of them — reads
@@ -269,12 +218,10 @@ const INBOX_THREAD_OPEN: McpToolAnnotations = {
  *
  * `destructiveHint: false` is the narrow, spec-level answer and NOT a claim that
  * the call is harmless: a new comment is ADDITIVE, deleting and overwriting
- * nothing, which is what the field asks. What actually keeps this away from an
- * unattended host is the category — `Social Media` is in
- * DIRECTORY_EXCLUDED_CATEGORIES, so the tool never reaches the listed surface a
- * connector runs from, and the "exactly one listed writer" assertion in
- * __tests__/tools.test.ts still holds. If that category is ever unexcluded, this
- * operation is the first one to look at.
+ * nothing, which is what the field asks. Since 2026-09-26 (owner decision: the
+ * hosted MCP lists every public operation) this tool IS on the hosted `full`
+ * table, so these hints are the only thing telling a connector host not to run
+ * it unattended — `readOnlyHint: false` and `idempotentHint: false` must stay.
  */
 const PUBLIC_POST_WRITE: McpToolAnnotations = {
   readOnlyHint: false,
@@ -285,13 +232,13 @@ const PUBLIC_POST_WRITE: McpToolAnnotations = {
 
 /**
  * `text-analyze.post` — the Rust worker's pure-compute endpoint: counts and a SHA-256
- * over a caller-supplied string.
+ * over a caller-supplied string — and `email-generate-address.post`.
  *
- * The ONLY published operation with `openWorldHint: false`. Every other tool here
- * reaches a third party whose answer can change between calls; this one touches no
- * network at all, so the same input always yields the same output and a host is free to
- * run it without the "this talks to the internet" caution. Read-only and idempotent for
- * the same reason: there is nothing outside the process for it to change.
+ * The ONLY published operations with `openWorldHint: false` (two). Every other tool here
+ * reaches a third party whose answer can change between calls; these make no
+ * network access at all, so a host is free to run them without the "this talks to the
+ * internet" caution. Read-only for the same reason: there is nothing outside the process
+ * for them to change.
  */
 const LOCAL_COMPUTE: McpToolAnnotations = {
   readOnlyHint: true,

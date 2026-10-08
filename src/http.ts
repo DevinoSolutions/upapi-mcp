@@ -1,11 +1,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import {
-  createUpapiToolSpecs,
-  isDirectoryListedOperation,
-  type CreateToolsOptions,
-} from './tools.js';
+import { createUpapiToolSpecs, type CreateToolsOptions } from './tools.js';
 import {
   createFacadeEntries,
   toolForbidden,
@@ -96,9 +92,6 @@ export type { Caller } from './tools.js';
  */
 export {
   createUpapiToolSpecs,
-  isDirectoryListedOperation,
-  DIRECTORY_EXCLUDED_CATEGORIES,
-  DIRECTORY_EXCLUDED_SLUGS,
   OPERATION_ANNOTATIONS,
   type CreateToolsOptions,
   type McpToolAnnotations,
@@ -174,17 +167,11 @@ export async function handleUpapiMcpRequest(
   request: Request,
   options: McpHttpOptions,
 ): Promise<Response> {
-  // The directory exclusion is applied HERE, and it is not one of the options a
-  // host can pass. This is the surface an AI marketplace lists, so what it
-  // advertises has to be a property of the transport rather than of whichever
-  // call site mounted it — a caller's own `filter` narrows further, never wider.
-  // The stdio server (`createUpapiMcpServer`) is untouched and still serves the
-  // whole catalog: it is installed by a developer with their own key, not
-  // offered to anyone browsing a connector list.
-  const specs = createUpapiToolSpecs({
-    ...options,
-    filter: (op) => isDirectoryListedOperation(op) && (options.filter?.(op) ?? true),
-  });
+  // Every public operation is served, exactly as on the stdio server (owner
+  // decision, 2026-09-26: the hosted MCP withholds no category and no slug). A
+  // host's own `filter` may still narrow it. How much of it a MODE advertises is
+  // `selectListedTools`'s decision below, and `directory` stays the curated set.
+  const specs = createUpapiToolSpecs(options);
   const byName = new Map(specs.map((spec) => [spec.name, spec]));
 
   const canExecute = options.canExecute ?? true;

@@ -1,21 +1,62 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { OPERATIONS, OPERATION_SLUGS } from '@upapi/sdk';
-import {
-  createUpapiToolSpecs,
-  isDirectoryListedOperation,
-  DIRECTORY_EXCLUDED_CATEGORIES,
-  DIRECTORY_EXCLUDED_SLUGS,
-  OPERATION_ANNOTATIONS,
-  type Caller,
-} from '../tools.js';
+import { createUpapiToolSpecs, OPERATION_ANNOTATIONS, type Caller } from '../tools.js';
+import { CALL_OP_TOOL_NAME } from '../facade.js';
 import { formatToolFailure, toToolFailure } from '../errors.js';
 import { handleUpapiMcpRequest } from '../http.js';
 
 const noopCaller: Caller = vi.fn(async () => ({ ok: true }));
 
-/** What the hosted endpoint serves, and what it withholds — see DIRECTORY_EXCLUDED_CATEGORIES. */
-const LISTED = OPERATIONS.filter(isDirectoryListedOperation);
-const WITHHELD = OPERATIONS.filter((op) => !isDirectoryListedOperation(op));
+/** The seeded catalog: every row, public and internal (`publishTargets: []`). */
+const SEED_PATH = fileURLToPath(
+  new URL('../../../../apps/web/scripts/operations.seed.json', import.meta.url),
+);
+
+interface SeedRow {
+  slug: string;
+  publishTargets: string[];
+}
+
+function readSeedRows(): SeedRow[] {
+  return (JSON.parse(readFileSync(SEED_PATH, 'utf8')) as { operations: SeedRow[] }).operations;
+}
+
+/**
+ * Every operation that is NOT read-only, named exhaustively. Since 2026-09-26
+ * the hosted endpoint lists every public operation, so each of these reaches a
+ * connector host's tool table and its hints are the only thing that tells the
+ * host not to run it unattended.
+ */
+const WRITER_SLUGS: readonly string[] = [
+  'audio-transcribe.post',
+  'email-read-verification-code-graph.post',
+  'email-read-verification-code.post',
+  'email-read-verification-link.post',
+  'instagram-check-account.post',
+  // Publishes a Reddit comment under a person's name — see PUBLIC_POST_WRITE.
+  'reddit-oauth-post-comment.post',
+  // Opening a Wellfound recruiter thread. It is the only writer here whose side
+  // effect is unmeasured rather than known: a conversation carries a
+  // server-side `unread` flag, this is the query the UI fires when a human
+  // opens a thread, and settling whether that clears it needs a live account
+  // nobody logged into for the port. See INBOX_THREAD_OPEN in tools.ts.
+  'wellfound-conversation-detail.post',
+];
+
+/**
+ * Operations the hosted endpoint withheld until 2026-09-26, pinned by NAME so
+ * a future gate cannot quietly take them back off: the owner decided the hosted
+ * MCP hides nothing. One per former exclusion — the Social Media and Utility
+ * categories and the two slug-level exclusions.
+ */
+const FORMERLY_WITHHELD_SLUGS: readonly string[] = [
+  'reddit-oauth-post-comment.post',
+  'email-read-verification-code.post',
+  'linkedin-profile-search.post',
+  'github-user-emails.get',
+];
 
 /**
  * Every request here asks for `?tools=full`: this file specifies the PER-OP tool
@@ -68,6 +109,8 @@ describe('the tool table covers the catalog', () => {
     // from the slug would be legal but hostile to reference in a prompt.
     for (const spec of createUpapiToolSpecs({ caller: noopCaller })) {
       expect(spec.name).toMatch(/^[A-Za-z0-9_]+$/);
+      // 64 is the MCP/LLM-provider tool-name limit; a longer one is rejected by the host.
+      expect(spec.name.length, spec.name).toBeLessThanOrEqual(64);
     }
   });
 
@@ -148,25 +191,7 @@ describe('every tool declares how it behaves', () => {
       .filter((spec) => !spec.annotations.readOnlyHint)
       .map((spec) => spec.slug)
       .sort();
-    expect(writers).toEqual([
-      'audio-transcribe.post',
-      'email-read-verification-code-graph.post',
-      'email-read-verification-code.post',
-      'email-read-verification-link.post',
-      'instagram-check-account.post',
-      // The only published operation that puts content into the open world under
-      // a person's name. It is here rather than in the listed-writer carve-out
-      // below because `Social Media` is a directory-excluded category, so a
-      // connector host never sees it — see PUBLIC_POST_WRITE in tools.ts.
-      'reddit-oauth-post-comment.post',
-      // Opening a Wellfound recruiter thread. It is the fourth REVIEWED
-      // non-read-only op and the only one here whose side effect is unmeasured
-      // rather than known: a conversation carries a server-side `unread` flag,
-      // this is the query the UI fires when a human opens a thread, and settling
-      // whether that clears it needs a live account nobody logged into for the
-      // port. See INBOX_THREAD_OPEN in tools.ts for how to settle it.
-      'wellfound-conversation-detail.post',
-    ]);
+    expect(writers).toEqual([...WRITER_SLUGS].sort());
   });
 
   it('never claims a read-only tool is destructive, and marks nothing destructive', () => {
@@ -232,12 +257,12 @@ describe('execution goes through the injected caller', () => {
 });
 
 describe('streamable HTTP transport', () => {
-  it('lists every listed tool with its real schema over the wire', async () => {
+  it('lists every operation with its real schema over the wire', async () => {
     const result = await rpcResult(rpc({ jsonrpc: '2.0', id: 1, method: 'tools/list' }));
     const tools = result['tools'] as { name: string; inputSchema: Record<string, unknown> }[];
-    expect(tools).toHaveLength(LISTED.length);
+    expect(tools).toHaveLength(OPERATIONS.length);
 
-    const first = LISTED[0]!;
+    const first = OPERATIONS[0]!;
     const served = tools.find((t) => t.name === first.operationId);
     const source = first.inputSchema as { properties?: object; required?: string[] };
     expect(served?.inputSchema['properties']).toEqual(source.properties);
@@ -252,7 +277,7 @@ describe('streamable HTTP transport', () => {
       name: string;
       annotations?: Record<string, unknown>;
     }[];
-    expect(tools).toHaveLength(LISTED.length);
+    expect(tools).toHaveLength(OPERATIONS.length);
     for (const tool of tools) {
       expect(tool.annotations, tool.name).toEqual({
         readOnlyHint: expect.any(Boolean),
@@ -266,33 +291,31 @@ describe('streamable HTTP transport', () => {
     }
   });
 
-  it('advertises exactly one listed writer — everything else is a safe read', async () => {
-    // The mailbox/recovery writers live in the excluded categories, so they never
-    // reach this table. `audio-transcribe.post` is the ONE reviewed exception: it
-    // is listed (category Tools) and submits a GPU job upstream, so it honestly
-    // reports readOnly:false + idempotent:false (a retry mints a fresh job id and
-    // spends GPU budget twice — see GPU_JOB_SUBMIT in tools.ts). Any OTHER writer
-    // landing in a listed category still has to be looked at before a connector
-    // host is told it may run it unattended — extend the carve-out deliberately.
+  it('advertises every reviewed writer as a writer — everything else is a safe read', async () => {
+    // With every public operation listed (2026-09-26), the mailbox, recovery,
+    // inbox and comment writers reach this table alongside `audio-transcribe.post`,
+    // so a connector host sees each of them as readOnly:false. Asserted on the
+    // SERIALIZED response: a hint that is right in the spec and lost on the wire
+    // would let a host run a public comment unattended.
     const result = await rpcResult(rpc({ jsonrpc: '2.0', id: 6, method: 'tools/list' }));
     const tools = result['tools'] as { name: string; annotations?: Record<string, unknown> }[];
-    const REVIEWED_WRITERS = new Set(['audio_transcribe_post']);
+    const writerNames = new Set(
+      OPERATIONS.filter((op) => WRITER_SLUGS.includes(op.slug)).map((op) => op.operationId),
+    );
+    expect(writerNames.size).toBe(WRITER_SLUGS.length);
     for (const tool of tools) {
       expect(tool.annotations?.['destructiveHint'], tool.name).toBe(false);
-      if (REVIEWED_WRITERS.has(tool.name)) {
-        expect(tool.annotations?.['readOnlyHint'], tool.name).toBe(false);
-        expect(tool.annotations?.['idempotentHint'], tool.name).toBe(false);
-      } else {
-        expect(tool.annotations?.['readOnlyHint'], tool.name).toBe(true);
+      expect(tool.annotations?.['readOnlyHint'], tool.name).toBe(!writerNames.has(tool.name));
+      if (!writerNames.has(tool.name)) {
         expect(tool.annotations?.['idempotentHint'], tool.name).toBe(true);
       }
     }
-    expect(tools.some((t) => REVIEWED_WRITERS.has(t.name))).toBe(true);
+    expect(tools.filter((t) => writerNames.has(t.name))).toHaveLength(WRITER_SLUGS.length);
   });
 
   it('executes a tool call through the caller', async () => {
     const caller = vi.fn(async () => ({ hello: 'world' }));
-    const first = LISTED[0]!;
+    const first = OPERATIONS[0]!;
     const result = await rpcResult(
       rpc({
         jsonrpc: '2.0',
@@ -315,7 +338,7 @@ describe('streamable HTTP transport', () => {
   });
 
   it('hides operations the caller may not use', async () => {
-    const only = LISTED[0]!;
+    const only = OPERATIONS[0]!;
     const res = await handleUpapiMcpRequest(rpc({ jsonrpc: '2.0', id: 4, method: 'tools/list' }), {
       caller: noopCaller,
       filter: (op) => op.slug === only.slug,
@@ -326,237 +349,142 @@ describe('streamable HTTP transport', () => {
 });
 
 /**
- * The hosted endpoint is what an AI directory advertises to anyone who clicks
- * "connect", so its tool table is a narrower thing than "the catalog" and has to
- * stay that way without anyone remembering to check. These specs are the memory:
- * a new Social Media operation added to the catalog is excluded automatically,
- * and if that ever stops being true this file fails rather than a reviewer
- * finding an Instagram scraper in a listing.
+ * The hosted endpoint lists every public operation. Until 2026-09-26 it withheld
+ * the Social Media and Utility categories plus two slugs; the owner lifted that
+ * gate ("we shouldn't hide anything that helps for SEO"), so these specs pin the
+ * opposite of what they used to: nothing in the catalog is missing from the
+ * hosted `full` table, and nothing named there is refused at dispatch.
  */
-describe('the hosted surface is scoped to what a directory may advertise', () => {
-  it('withholds exactly the excluded categories plus the slug-level exclusions', () => {
-    expect(WITHHELD.length).toBeGreaterThan(0);
-    for (const op of WITHHELD) {
-      const byCategory = DIRECTORY_EXCLUDED_CATEGORIES.includes(op.category);
-      const bySlug = DIRECTORY_EXCLUDED_SLUGS.includes(op.slug);
-      expect(byCategory || bySlug, `${op.slug} withheld for no declared reason`).toBe(true);
-    }
-    for (const op of LISTED) {
-      expect(DIRECTORY_EXCLUDED_CATEGORIES).not.toContain(op.category);
-      expect(DIRECTORY_EXCLUDED_SLUGS).not.toContain(op.slug);
-    }
-  });
-
-  it('withholds the people-search operation the category filter cannot catch', () => {
-    // A professional-network people-search categorized `Search` must not ride
-    // onto a directory listing (the listing pack's §5 blocker). The listed
-    // COUNT is pinned once, in the counts test below.
-    expect(DIRECTORY_EXCLUDED_SLUGS).toContain('linkedin-profile-search.post');
-    expect(LISTED.map((op) => op.slug)).not.toContain('linkedin-profile-search.post');
-  });
-
-  it('withholds the email fan-out the category filter cannot catch', () => {
-    // `github-user-emails.get` reads a person's email addresses off their public
-    // commits. It is categorized `Developer Tools`, so nothing in the CATEGORY
-    // list withholds it — the same gap `linkedin-profile-search.post` sits in.
-    // Pinned by NAME rather than by the count below, so a future op that happens
-    // to restore the old total cannot quietly put this one back on the directory.
-    expect(DIRECTORY_EXCLUDED_SLUGS).toContain('github-user-emails.get');
-    expect(LISTED.map((op) => op.slug)).not.toContain('github-user-emails.get');
-    expect(WITHHELD.map((op) => op.slug)).toContain('github-user-emails.get');
-  });
-
-  it('serves the listed operations and no others over tools/list', async () => {
+describe('the hosted surface lists every public operation', () => {
+  it('serves every catalog operation over tools/list, and nothing else', async () => {
     const result = await rpcResult(rpc({ jsonrpc: '2.0', id: 10, method: 'tools/list' }));
     const names = (result['tools'] as { name: string }[]).map((t) => t.name).sort();
 
-    expect(names).toEqual(LISTED.map((op) => op.operationId).sort());
-    for (const op of WITHHELD) {
-      expect(names).not.toContain(op.operationId);
+    expect(names).toEqual(OPERATIONS.map((op) => op.operationId).sort());
+  });
+
+  it('lists the operations the old directory gate withheld, by name', async () => {
+    const bySlug = new Map(OPERATIONS.map((op) => [op.slug, op]));
+    // The pin only means something if it still spans both former categories.
+    const categories = FORMERLY_WITHHELD_SLUGS.map((slug) => bySlug.get(slug)?.category);
+    expect(categories).toContain('Social Media');
+    expect(categories).toContain('Utility');
+
+    const result = await rpcResult(rpc({ jsonrpc: '2.0', id: 11, method: 'tools/list' }));
+    const names = (result['tools'] as { name: string }[]).map((t) => t.name);
+    for (const slug of FORMERLY_WITHHELD_SLUGS) {
+      expect(names, slug).toContain(bySlug.get(slug)?.operationId);
     }
   });
 
-  it('refuses to CALL a withheld operation, not merely to advertise it', async () => {
-    // Hiding a tool from tools/list while still executing it on request would be
-    // no exclusion at all — an agent only has to guess the name.
-    const caller = vi.fn(async () => ({ leaked: true }));
-    const hidden = WITHHELD[0]!;
+  it('executes a formerly withheld operation through the caller', async () => {
+    // Listing is not enough: dispatch has to reach it too, or the tool would be
+    // advertised and then refused.
+    const caller = vi.fn(async () => ({ ok: true }));
+    const op = OPERATIONS.find((o) => o.slug === 'linkedin-profile-search.post')!;
     const result = await rpcResult(
       rpc({
         jsonrpc: '2.0',
-        id: 11,
+        id: 12,
         method: 'tools/call',
-        params: { name: hidden.operationId, arguments: {} },
+        params: { name: op.operationId, arguments: {} },
       }),
       caller,
     );
 
-    expect(result['isError']).toBe(true);
-    expect(caller).not.toHaveBeenCalled();
+    expect(result['isError']).toBeUndefined();
+    expect(caller).toHaveBeenCalledWith(op.slug, {});
   });
 
-  it('lets a host narrow the surface further but never widen it', async () => {
-    const hidden = WITHHELD[0]!;
-    const res = await handleUpapiMcpRequest(rpc({ jsonrpc: '2.0', id: 12, method: 'tools/list' }), {
-      caller: noopCaller,
-      // A host asking for a withheld operation by name still does not get it.
-      filter: (op) => op.slug === hidden.slug,
-    });
-    const parsed = JSON.parse(await res.text()) as { result: { tools: { name: string }[] } };
-    expect(parsed.result.tools).toHaveLength(0);
+  it('matches the unfiltered specs the stdio server serves', () => {
+    // One registry, two transports: the hosted endpoint no longer differs from
+    // what `upapi-mcp` serves a developer with their own key.
+    expect(createUpapiToolSpecs({ caller: noopCaller })).toHaveLength(OPERATIONS.length);
   });
 
-  it('leaves the unfiltered tool table, the one the stdio server uses, on the full catalog', () => {
-    // The exclusion is about what a directory advertises, not about what upAPI
-    // can do: a developer who installs `upapi-mcp` with their own key still gets
-    // every operation, exactly as the REST gateway does. That server is built by
-    // createUpapiTools(), a 1:1 wrap of these specs with no filter of its own —
-    // asserted here rather than through ../mastra.js, which this file stays free
-    // of on purpose (importing it would pull @mastra/core into the http tests).
-    const full = createUpapiToolSpecs({ caller: noopCaller });
-    expect(full).toHaveLength(OPERATIONS.length);
-    for (const op of WITHHELD) {
-      expect(full.map((spec) => spec.slug)).toContain(op.slug);
+  it('serves exactly the public rows of the seeded catalog', () => {
+    // Derived, not typed: a hand-kept count went stale the day an op was
+    // published or made internal while this was in review. The seed carries
+    // every row, so only those with a publish target belong on the surface.
+    const seed = readSeedRows();
+    const publicSlugs = seed
+      .filter((row) => row.publishTargets.includes('upapi'))
+      .map((row) => row.slug)
+      .sort();
+    expect(OPERATIONS.map((op) => op.slug).sort()).toEqual(publicSlugs);
+  });
+
+  it('never lists or dispatches an internal operation (empty publishTargets)', async () => {
+    // `facebook-post-comment.post` is the named example: a write on a third
+    // party's account, internal since #302. Hiding nothing PUBLIC must not widen
+    // into exposing what was never published.
+    const seed = readSeedRows();
+    const internal = seed
+      .filter((row) => !row.publishTargets.includes('upapi'))
+      .map((row) => row.slug);
+    expect(internal).toContain('facebook-post-comment.post');
+
+    const publicNames = new Set(OPERATIONS.map((op) => op.operationId));
+    for (const mode of ['full', 'directory']) {
+      const list = await handleUpapiMcpRequest(
+        new Request(`https://app.upapi.io/api/mcp?tools=${mode}`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            accept: 'application/json, text/event-stream',
+          },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 20, method: 'tools/list' }),
+        }),
+        { caller: noopCaller },
+      );
+      const listed = (JSON.parse(await list.text()) as { result: { tools: { name: string }[] } })
+        .result.tools;
+      // Nothing listed is outside the public catalog, so no internal op is listed.
+      for (const tool of listed)
+        expect(publicNames.has(tool.name), `${mode}: ${tool.name}`).toBe(true);
+      expect(listed.map((tool) => tool.name).join(' ')).not.toMatch(/facebook/i);
     }
-  });
 
-  it('pins the counts the marketplace listing copy quotes', () => {
-    // If a catalog change moves these numbers, any listing/submission text
-    // quoting them needs the same edit — hence a hard assertion rather than a
-    // derived one. 2026-08-13: 26→33 listed (the 7 new Tools ops: screenshot,
-    // html-to-pdf, fetch-markdown, pdf-extract-text, image-ocr and the
-    // audio-transcribe pair); withheld unchanged at 24. 2026-08-17: 33→32
-    // (linkedin-profile-search.post slug-excluded — the listing pack's §5
-    // blocker; withheld 24→25). 2026-08-17: 32→34 (google-maps-search.post and
-    // google-maps-place.get — a new Maps category, both directory-listable;
-    // withheld unchanged at 25). 2026-08-18: 34→35 (google-maps-reviews.get
-    // completes the Maps trio; withheld unchanged at 25). 2026-09-02: listed
-    // unchanged at 35, withheld 25→27 (linkedin-jobs-search + linkedin-jobs-detail,
-    // D22). They are categorized `Social Media`, so the CATEGORY filter excluded
-    // them the moment they landed with nobody editing this file — which is the
-    // behaviour the exclusion list's own comment promises. The bargain it names
-    // (third parties' personal data) fits them loosely at best: a job posting is a
-    // company's public advertisement. Withholding them from the DIRECTORY is the
-    // conservative side of that call and costs nothing, since the stdio surface
-    // still carries every operation. Recategorizing is a catalog-wide product
-    // decision (marketplace grouping, landing counts, seeded mirror), not a
-    // directory one. 2026-09-03: listed 35→36 (text-analyze.post — the Rust op,
-    // public and live all along but absent from the generated catalog until the
-    // exporter learned to read the Rust worker; `Developer Tools`, so it lands on
-    // the listed side; withheld unchanged at 27). 2026-09-07: listed unchanged at
-    // 36, withheld 27→28 (instagram-get-user-by-id.post, the one PUBLIC operation
-    // of the Instagram mobile-API port — the other eleven take a session blob and
-    // ship `publish_targets: []`, so they never enter the generated catalog and
-    // never reach this table at all). `Social Media`, so the CATEGORY filter
-    // withheld it the moment it landed, again with nobody editing this file.
-    // Also 2026-09-07, on top of that: withheld 28→30 (upwork-jobs-search +
-    // upwork-jobs-detail, the keyless Upwork visitor pair). Same shape as
-    // the LinkedIn jobs pair above and for the same reason: they are categorized
-    // `Social Media`, so the CATEGORY filter withheld them the moment they landed
-    // without anyone editing the exclusion list. A job posting is a company's
-    // public advertisement rather than a third party's personal data, so the
-    // bargain fits them loosely — withholding is the conservative side and costs
-    // nothing, since the stdio surface still carries both. Recategorizing the
-    // jobs operations is one catalog-wide product decision covering LinkedIn and
-    // Upwork together, not a directory one, and not this PR's to take.
-    // Also 2026-09-07, on top of that: withheld 30→33 (tiktok-oembed.get,
-    // tiktok-get-video-embed.get and tiktok-get-comment-replies.get, the three PUBLIC
-    // reads of the TikTok port — the other three ops it adds take a session and ship
-    // `publish_targets: []`, so they never enter the generated catalog). Same shape as
-    // the two entries above: `Social Media`, so the CATEGORY filter withheld them the
-    // moment they landed with nobody editing the exclusion list. All three are anonymous
-    // public reads that spend no session, so the personal-data bargain fits them loosely,
-    // but withholding is the conservative side and costs nothing — the stdio surface
-    // still carries every operation.
-    // Also 2026-09-07, on top of that: withheld 33→45 (the twelve public
-    // Wellfound operations). They were first written with a category of their own,
-    // `jobs`, which would have advertised every one of them — including two that
-    // read a private recruiter inbox — to anyone who clicks connect, while
-    // `linkedin-jobs-search`/`-detail` sat withheld for being the same kind of
-    // operation. The fix was the category, not a slug carve-out: they are
-    // `Social Media` now, matching the LinkedIn pair exactly, so the CATEGORY
-    // filter withheld all twelve with no edit here beyond this number. A new
-    // lowercase category invented by one port is a catalog-wide fact (marketplace
-    // grouping, landing counts, seeded mirror) that happened to decide a directory
-    // question by accident.
-    // Also 2026-09-07, on top of that: withheld 45→48 (the three Chatous reads:
-    // check-session, get-account-state, poll-events — the other eight ops the port
-    // adds are writes and identity operations that ship `publish_targets: []`, so
-    // they never enter the generated catalog and never reach this table). Same
-    // mechanism as every entry above: `Social Media`, so the CATEGORY filter
-    // withheld them the moment they landed with nobody editing the exclusion list.
-    // Here the bargain that list names fits exactly rather than loosely — Chatous
-    // matchmaking puts an account in front of random real people, and these reads
-    // carry an account's own live conversations. **LISTED did not move, so no
-    // listing or submission copy needs an edit for this change**; that is the
-    // number the marketplace text quotes, and the one this assertion protects.
-    // Also 2026-09-07, on top of that: listed 36→44 (the eight public `github-*`
-    // reads of the G2 port — search issues/repos/users/discussions, repo issues,
-    // repo contributors, issue comments, commit-author emails). These are the first
-    // entries in a while to move the LISTED side rather than the withheld one: they
-    // are `Developer Tools`, which no category filter touches. The port's four WRITE
-    // ops are internal (`publish_targets: []`) and never enter this union at all, so
-    // WITHHELD is unchanged at 48. **LISTED moved, so the marketplace listing copy
-    // that quotes this number needs the edit that goes with it.**
-    // Also 2026-09-07, on the next commit of the same port: listed 44→43,
-    // withheld 48→49. `github-user-emails.get` joins DIRECTORY_EXCLUDED_SLUGS —
-    // it fans a repo's commit history out into the email addresses of everyone
-    // who has committed to it, which is the same personal-data bargain the
-    // LinkedIn people-search was withheld over, and no category filter can see it
-    // because the operation is `Developer Tools` like the other seven. This is a
-    // SLUG carve-out rather than a category change on purpose: the op belongs with
-    // its siblings everywhere else in the catalog, and only the directory question
-    // differs. **LISTED moved again, so the listing copy quoting it takes the
-    // combined 36→43 for this port, not the intermediate 44.**
-    // Also 2026-09-07, on top of that: withheld 49→52 (contra-job-detail,
-    // contra-company-profile and contra-discover-people, the three PUBLIC reads of
-    // the contra.com port — the other ten ops it adds are session, identity and write
-    // operations shipping `publish_targets: []`, so they never enter the generated
-    // catalog and never reach this table). Same mechanism as every entry above: they
-    // are `Social Media`, so the CATEGORY filter withheld all three the moment they
-    // landed with nobody editing the exclusion list. The bargain that list names fits
-    // contra-discover-people squarely — it returns freelancers' names and profile
-    // handles — and the other two only loosely, a job advertisement and a company page
-    // being a business's own public copy. Withholding is the conservative side and
-    // costs nothing: the stdio surface still carries every operation. **LISTED did not
-    // move, so no listing or submission copy needs an edit for this change.**
-    // Also 2026-09-10: withheld 52→54 (reddit-oauth-me.get and
-    // reddit-oauth-post-comment.post, the registered-app lane over Reddit's own
-    // OAuth2 API). Same mechanism as every entry above: they are `Social Media`, so
-    // the CATEGORY filter withheld both the moment they landed with nobody editing
-    // the exclusion list — and here that filter is load-bearing rather than merely
-    // conservative, because the post operation is the first published op that
-    // publishes content in the open world under a person's name. It is a writer, so
-    // it also joins the exhaustive list in "claims read-only ONLY for operations that
-    // write nothing upstream" above; it does NOT join the listed-writer carve-out
-    // below, because being withheld is exactly what keeps it off the surface a
-    // connector host runs unattended. **LISTED did not move, so no listing or
-    // submission copy needs an edit for this change.**
-    // 2026-09-22: withheld 54→56 (`email-generate-address.post` and
-    // `email-read-verification-code-graph.post`, two new Python email-signup
-    // primitives). Both are categorized `Utility`, which already excludes the two
-    // pre-existing `email-read-verification-*` reads for the same reason — see
-    // DIRECTORY_EXCLUDED_CATEGORIES's own comment — so the CATEGORY filter withheld
-    // both the moment they landed with nobody editing the exclusion list. **LISTED
-    // did not move, so no listing or submission copy needs an edit for this change.**
-    // 2026-09-23: listed 43→44 (`youtube-get-transcript.get`, the first `YouTube`
-    // category operation). `YouTube` is not in DIRECTORY_EXCLUDED_CATEGORIES and the
-    // slug is not in DIRECTORY_EXCLUDED_SLUGS, so it reaches the hosted directory
-    // surface the moment it lands. WITHHELD is unchanged at 56. **LISTED moved, so
-    // the marketplace listing copy that quotes this number needs the edit that goes
-    // with it.**
-    // 2026-09-29: withheld 56→57 (`facebook-post-comment.post`, the Facebook
-    // mbasic comment writer from the account-automation port). It is categorized
-    // `Social Media`, so the CATEGORY filter withheld it the moment it landed with
-    // nobody editing the exclusion list — and here that filter is load-bearing
-    // rather than merely conservative, because it is a writer that publishes
-    // content in the open world under a person's name (it also joins the
-    // exhaustive writers list above). **LISTED did not move, so no listing or
-    // submission copy needs an edit for this change.**
-    // Then `facebook-post-comment.post` went INTERNAL (`publishTargets: []`, a write on a
-    // third party account), so it left the public catalog altogether: withheld 57→56.
-    // **LISTED did not move, so no listing or submission copy needs an edit.**
-    expect(LISTED).toHaveLength(44);
-    expect(WITHHELD).toHaveLength(56);
+    // Dispatch. The tool table is keyed by operationId (slug with `.`/`-` -> `_`),
+    // so ask for the internal op BY THAT NAME, and as `call_op {slug}` in compact
+    // mode. A positive control proves the name format reaches a real public
+    // writer, so a refusal below is about the op, not about a mistyped name.
+    const post = (mode: string, params: unknown, caller: Caller) =>
+      rpcResult(
+        new Request(`https://app.upapi.io/api/mcp?tools=${mode}`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            accept: 'application/json, text/event-stream',
+          },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 21, method: 'tools/call', params }),
+        }),
+        caller,
+      );
+    const control = vi.fn(async () => ({ ok: true }));
+    const controlSlug = 'reddit-oauth-post-comment.post';
+    const controlResult = await post(
+      'full',
+      { name: controlSlug.replace(/[.-]/g, '_'), arguments: {} },
+      control,
+    );
+    expect(controlResult['isError']).toBeUndefined();
+    expect(control).toHaveBeenCalledWith(controlSlug, {});
+
+    const caller = vi.fn(async () => ({ ok: true }));
+    for (const slug of internal) {
+      const name = slug.replace(/[.-]/g, '_');
+      for (const mode of ['full', 'directory']) {
+        const result = await post(mode, { name, arguments: {} }, caller);
+        expect(result['isError'], `${mode}: ${name}`).toBe(true);
+      }
+      const viaFacade = await post(
+        'compact',
+        { name: CALL_OP_TOOL_NAME, arguments: { slug } },
+        caller,
+      );
+      expect(viaFacade['isError'], `compact call_op: ${slug}`).toBe(true);
+    }
+    expect(caller).not.toHaveBeenCalled();
   });
 });

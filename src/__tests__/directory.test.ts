@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { OPERATIONS } from '@upapi/sdk';
-import { createUpapiToolSpecs, isDirectoryListedOperation, type Caller } from '../tools.js';
+import { createUpapiToolSpecs, type Caller } from '../tools.js';
 import { CALL_OP_TOOL_NAME, SEARCH_OPS_TOOL_NAME } from '../facade.js';
 import { createDirectoryEntries, DIRECTORY_FLAGSHIP_SLUGS } from '../directory.js';
 import { handleUpapiMcpRequest, resolveToolMode } from '../http.js';
@@ -68,25 +68,13 @@ async function listTools(
   return parsed.result.tools;
 }
 
-const SERVED = createUpapiToolSpecs({
-  caller: noopCaller,
-  filter: isDirectoryListedOperation,
-});
+const SERVED = createUpapiToolSpecs({ caller: noopCaller });
 
 describe('the flagship list tracks the live catalog', () => {
   it('names only slugs the catalog still has', () => {
     const known = new Set(OPERATIONS.map((op) => op.slug));
     const missing = DIRECTORY_FLAGSHIP_SLUGS.filter((slug) => !known.has(slug));
     expect(missing).toEqual([]);
-  });
-
-  it('names only slugs this surface is allowed to advertise', () => {
-    // A flagship slug that is also a withheld category would be a listing this
-    // transport deliberately refuses — caught here rather than by a reviewer.
-    const withheld = new Set(
-      OPERATIONS.filter((op) => !isDirectoryListedOperation(op)).map((op) => op.slug),
-    );
-    expect(DIRECTORY_FLAGSHIP_SLUGS.filter((slug) => withheld.has(slug))).toEqual([]);
   });
 
   it('has no duplicates', () => {
@@ -202,14 +190,6 @@ describe('?tools=directory', () => {
         openWorldHint: expect.any(Boolean),
       });
     }
-  });
-
-  it('never advertises a withheld operation', async () => {
-    const withheldNames = new Set(
-      OPERATIONS.filter((op) => !isDirectoryListedOperation(op)).map((op) => op.operationId),
-    );
-    const listed = (await listTools('?tools=directory')).map((tool) => tool.name);
-    expect(listed.filter((name) => withheldNames.has(name))).toEqual([]);
   });
 
   it('keeps the access decision identical to the other modes', async () => {

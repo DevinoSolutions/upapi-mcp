@@ -5,18 +5,19 @@ import type { McpToolAnnotations, ToolCallResult, UpapiToolSpec } from './tools.
  * operation.
  *
  * A hosted MCP connection pays for its tool table on every single turn — the
- * whole `tools/list` result is re-sent as context. upAPI's directory-listed
- * catalog is 26 operations today and each carries the worker's real JSON Schema,
- * so the full table is tens of kilobytes and lands squarely in the range where
+ * whole `tools/list` result is re-sent as context. upAPI's public catalog is
+ * about a hundred operations and each carries the worker's real JSON Schema,
+ * so the full table is about a hundred kilobytes (99 KB of names, descriptions
+ * and schemas alone, measured 2026-09-26), far into the range where
  * clients start reporting degraded tool selection. The compact table is two
  * meta-tools plus a handful of always-on operations, and it stays a few
  * kilobytes no matter how large the catalog grows.
  *
  * Nothing here is a second execution path. `call_op` resolves a slug against the
  * SAME `UpapiToolSpec` objects the per-op tools are built from and invokes
- * `spec.call`, so metering, gating, error rendering, and the withheld-category
- * exclusion are byte-identical — a caller cannot reach anything through the
- * facade that the per-op table would not have exposed.
+ * `spec.call`, so metering, gating, error rendering, and any host `filter` are
+ * byte-identical — a caller cannot reach anything through the facade that the
+ * per-op table would not have exposed.
  */
 
 // Declared in a leaf module so a browser bundle can read the names without
@@ -45,11 +46,10 @@ import { CALL_OP_TOOL_NAME, SEARCH_OPS_TOOL_NAME } from './tool-names.js';
  *  - `wikipedia-article.get` — grounded factual lookup with no query planning.
  *
  * `reddit-search-posts.get` would otherwise be an obvious third pick by raw
- * demand, and is deliberately NOT here: it is a Social Media operation, which
- * `DIRECTORY_EXCLUDED_CATEGORIES` withholds from this whole surface. Listing it
- * always-on would have quietly re-admitted a withheld category — the facade must
- * never widen the table, so the always-on set is intersected with what the
- * transport already decided to serve (see `createFacadeEntries`).
+ * demand. It was kept out while the hosted surface withheld Social Media (until
+ * 2026-09-26); promoting it now is a context-budget decision, not a scope one.
+ * The facade must never widen the table, so the always-on set is intersected
+ * with what the transport already decided to serve (see `createFacadeEntries`).
  */
 export const ALWAYS_ON_SLUGS: readonly string[] = [
   'web-search.post',
@@ -488,18 +488,17 @@ export function createFacadeEntries(specs: readonly UpapiToolSpec[]): {
       >;
       const slug = typeof raw['slug'] === 'string' ? raw['slug'] : '';
       const spec = bySlug.get(slug);
-      // Same answer the per-op table gives for a name it does not carry — a
-      // withheld operation must not become reachable, or discoverable, by being
-      // named through the dispatcher instead.
+      // Same answer the per-op table gives for a name it does not carry — an
+      // operation a host filter removed must not become reachable, or
+      // discoverable, by being named through the dispatcher instead.
       if (!spec) return toolNotFound(slug);
       const opInput = raw['input'];
       return spec.call(typeof opInput === 'object' && opInput !== null ? opInput : {});
     },
   };
 
-  // Intersected with what is actually served: an always-on slug that this
-  // transport withholds (or a host filter removed, or the catalog dropped) is
-  // simply absent rather than resurrected.
+  // Intersected with what is actually served: an always-on slug a host filter
+  // removed, or the catalog dropped, is simply absent rather than resurrected.
   const alwaysOn = ALWAYS_ON_SLUGS.map((slug) => bySlug.get(slug)).filter(
     (spec): spec is UpapiToolSpec => spec !== undefined,
   );
