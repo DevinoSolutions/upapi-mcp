@@ -153,11 +153,6 @@ describe('every tool declares how it behaves', () => {
       'email-read-verification-code-graph.post',
       'email-read-verification-code.post',
       'email-read-verification-link.post',
-      // Posts a comment on a Facebook post under the caller's own session
-      // cookies — publishes content in the open world under a person's name, so
-      // it is a writer like reddit-oauth-post-comment.post below. `Social Media`
-      // is directory-excluded, so a connector host never sees it (WITHHELD).
-      'facebook-post-comment.post',
       'instagram-check-account.post',
       // The only published operation that puts content into the open world under
       // a person's name. It is here rather than in the listed-writer carve-out
@@ -558,7 +553,10 @@ describe('the hosted surface is scoped to what a directory may advertise', () =>
     // content in the open world under a person's name (it also joins the
     // exhaustive writers list above). **LISTED did not move, so no listing or
     // submission copy needs an edit for this change.**
+    // Then `facebook-post-comment.post` went INTERNAL (`publishTargets: []`, a write on a
+    // third party account), so it left the public catalog altogether: withheld 57→56.
+    // **LISTED did not move, so no listing or submission copy needs an edit.**
     expect(LISTED).toHaveLength(44);
-    expect(WITHHELD).toHaveLength(57);
+    expect(WITHHELD).toHaveLength(56);
   });
 });
