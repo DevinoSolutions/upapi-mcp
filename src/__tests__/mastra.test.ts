@@ -13,6 +13,10 @@ import {
   EXECUTE_TYPESCRIPT_TOOL_NAME,
   SEARCH_TOOLS_TOOL_NAME,
 } from '../code-mode.js';
+import {
+  CPU_BUDGET_EXCEEDED_CODE,
+  DEFAULT_CODE_MODE_CPU_BUDGET_MS,
+} from '../code-mode-cpu-budget.js';
 import type { Caller } from '../tools.js';
 
 /**
@@ -236,7 +240,7 @@ describe('the default Mastra MCP surface is Code Mode', () => {
     }
   });
 
-  it('an infinite loop is killed by the 30 second sandbox timeout', async () => {
+  it('an infinite loop is stopped by the CPU budget, long before the 30 second sandbox timeout', async () => {
     const { client, close } = await connect(noopCaller);
     try {
       const started = Date.now();
@@ -245,21 +249,24 @@ describe('the default Mastra MCP surface is Code Mode', () => {
         arguments: { code: 'while (true) {}' },
       })) as CallToolResult;
       const elapsedMs = Date.now() - started;
-      // The tool CALL itself succeeds — a killed guest program is a normal
+      // The tool CALL itself succeeds — a stopped guest program is a normal
       // Code Mode outcome, reported as data (`success: false`), not an MCP
       // protocol error. `execute_typescript` returns the sandbox's own
       // envelope unchanged, matching the reference convention: only a denied
       // or failed OPERATION call is renormalized into a thrown sandbox error.
+      // The loop never awaits, so it is the CPU budget
+      // (../code-mode-cpu-budget.ts) that ends it — before this change it held
+      // the event loop for the full CODE_MODE_TIMEOUT_MS.
       expect(result.isError).not.toBe(true);
-      expect(elapsedMs).toBeGreaterThanOrEqual(CODE_MODE_TIMEOUT_MS);
+      expect(elapsedMs).toBeGreaterThanOrEqual(DEFAULT_CODE_MODE_CPU_BUDGET_MS);
+      expect(elapsedMs).toBeLessThan(CODE_MODE_TIMEOUT_MS);
       const text = result.content[0]?.text ?? '';
       expect(text).toContain('"success":false');
-      expect(text.toLowerCase()).toMatch(/timed out/);
+      expect(text).toContain(`${CPU_BUDGET_EXCEEDED_CODE}: `);
     } finally {
       await close();
     }
-    // 30s sandbox timeout + generous margin for the QuickJS teardown itself.
-  }, 40_000);
+  }, 10_000);
 });
 
 describe('MCP_TOOL_SURFACE=full keeps every existing tool-enumeration behaviour', () => {

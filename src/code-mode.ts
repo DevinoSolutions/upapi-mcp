@@ -3,12 +3,17 @@ import {
   createTool,
   generateStubs,
   noopObserve,
+  type CodeModeTransport,
   type Tool,
 } from '@mastra/core/tools';
 import { RequestContext } from '@mastra/core/request-context';
 import type { PublicSchema } from '@mastra/core/schema';
-import type { QuickJsCodeModeTransport } from '@mastra/quickjs';
 import { z } from 'zod';
+import {
+  CpuBudgetedQuickJsTransport,
+  CPU_BUDGET_EXCEEDED_CODE,
+  DEFAULT_CODE_MODE_CPU_BUDGET_MS,
+} from './code-mode-cpu-budget.js';
 import { toToolFailure } from './errors.js';
 import { createUpapiToolSpecs, type CreateToolsOptions, type UpapiToolSpec } from './tools.js';
 
@@ -36,6 +41,12 @@ import { createUpapiToolSpecs, type CreateToolsOptions, type UpapiToolSpec } fro
  * INPUT, which fails the call itself (via zod, before the sandbox ever starts).
  * Arguments that fail an operation's own input schema are coded the same way,
  * as `INVALID_INPUT` (see `toCodeModeTool`).
+ *
+ * The sandbox runs ON THE EVENT LOOP, so a program that computes without
+ * awaiting would stall every other request the process serves until the 30s
+ * deadline. `CpuBudgetedQuickJsTransport` (./code-mode-cpu-budget.ts) stops it
+ * after 1.5s of continuous computation, or 5s of computation in total across
+ * its stretches between awaits, with `CPU_BUDGET_EXCEEDED`.
  */
 
 export const SEARCH_TOOLS_TOOL_NAME = 'search_tools';
@@ -54,24 +65,31 @@ export const CODE_MODE_TIMEOUT_MS = 30_000;
  * would be.
  *
  * Loaded on the first `execute_typescript` call, not at import time:
- * `@mastra/quickjs` is an OPTIONAL peer, so importing `@upapi/mcp/mastra` for
- * `createUpapiTools` or the `full` surface must not require it to be
- * installed. A failed load is not cached, so installing the peer and calling
- * again works without a restart.
+ * `@mastra/quickjs` and `quickjs-emscripten` are OPTIONAL peers, so importing
+ * `@upapi/mcp/mastra` for `createUpapiTools` or the `full` surface must not
+ * require them to be installed. A failed load is not cached, so installing the
+ * peers and calling again works without a restart.
  */
-let codeModeTransport: Promise<QuickJsCodeModeTransport> | undefined;
+let codeModeTransport: Promise<CodeModeTransport> | undefined;
 
-function loadCodeModeTransport(): Promise<QuickJsCodeModeTransport> {
-  codeModeTransport ??= import('@mastra/quickjs').then(
-    ({ QuickJsCodeModeTransport: Transport }) => new Transport({ memoryLimitMb: 128 }),
-    (err: unknown) => {
-      codeModeTransport = undefined;
-      throw new Error(
-        `${EXECUTE_TYPESCRIPT_TOOL_NAME} needs the optional peer dependency @mastra/quickjs; install it alongside @upapi/mcp.`,
-        { cause: err },
-      );
-    },
-  );
+function loadCodeModeTransport(): Promise<CodeModeTransport> {
+  codeModeTransport ??= (async () => {
+    const [{ QuickJsCodeModeTransport }, { getQuickJS }] = await Promise.all([
+      import('@mastra/quickjs'),
+      import('quickjs-emscripten'),
+    ]);
+    return new CpuBudgetedQuickJsTransport({
+      Transport: QuickJsCodeModeTransport,
+      module: await getQuickJS(),
+      memoryLimitMb: 128,
+    });
+  })().catch((err: unknown) => {
+    codeModeTransport = undefined;
+    throw new Error(
+      `${EXECUTE_TYPESCRIPT_TOOL_NAME} needs the optional peer dependencies @mastra/quickjs and quickjs-emscripten; install them alongside @upapi/mcp.`,
+      { cause: err },
+    );
+  });
   return codeModeTransport;
 }
 
@@ -84,7 +102,9 @@ export const CODE_MODE_INSTRUCTIONS = `This server exposes two tools instead of 
    sandbox. The program may call any external_* function ${SEARCH_TOOLS_TOOL_NAME} declared —
    batch independent calls with Promise.all instead of spending one round trip per operation.
    The program's final expression's value (or its explicit return, inside a function) becomes the
-   tool result. Killed after 30 seconds.
+   tool result. Killed after 30 seconds. A program that computes for more than
+   ${DEFAULT_CODE_MODE_CPU_BUDGET_MS / 1000} seconds without awaiting an external_* call is stopped with
+   "${CPU_BUDGET_EXCEEDED_CODE}: ..." — keep loops short and let the awaited calls do the work.
 
 Every external_* call enforces the EXACT SAME auth, metering, and quota rules the operation
 enforces when called directly — Code Mode changes how a call is shaped, never what it is allowed
@@ -179,7 +199,9 @@ const executeTypescriptInputSchema = z.object({
     .string()
     .describe(
       'A TypeScript program. May call any external_* function search_tools declared. Runs with ' +
-        'a 30 second timeout in an isolated sandbox with no filesystem, network, or process access.',
+        'a 30 second timeout in an isolated sandbox with no filesystem, network, or process access; ' +
+        'computing for more than 1.5 seconds without awaiting an external_* call, or for more than ' +
+        `5 seconds in total, stops it with ${CPU_BUDGET_EXCEEDED_CODE}.`,
     ),
 });
 

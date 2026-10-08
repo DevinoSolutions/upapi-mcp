@@ -6,19 +6,25 @@ import { EXECUTE_TYPESCRIPT_TOOL_NAME } from '../code-mode.js';
 import type { Caller } from '../tools.js';
 
 /**
- * `@mastra/quickjs` is an OPTIONAL peer of `@upapi/mcp`: someone importing
+ * `@mastra/quickjs` and `quickjs-emscripten` (the WASM module the CPU-budgeted
+ * transport hands it) are OPTIONAL peers of `@upapi/mcp`: someone importing
  * `@upapi/mcp/mastra` only for `createUpapiTools` or the `full` surface may not
- * have it installed. So the module must not load until an `execute_typescript`
- * call actually needs the sandbox.
+ * have them installed. So neither may load until an `execute_typescript` call
+ * actually needs the sandbox.
  *
- * The mock passes the real module through unchanged; it only records WHEN it
+ * The mocks pass the real modules through unchanged; they only record WHEN each
  * was first imported.
  */
 
-const loaded = vi.hoisted(() => ({ quickjs: false }));
+const loaded = vi.hoisted(() => ({ quickjs: false, emscripten: false }));
 
 vi.mock('@mastra/quickjs', async (importOriginal) => {
   loaded.quickjs = true;
+  return importOriginal();
+});
+
+vi.mock('quickjs-emscripten', async (importOriginal) => {
+  loaded.emscripten = true;
   return importOriginal();
 });
 
@@ -31,6 +37,7 @@ describe('@mastra/quickjs is loaded lazily', () => {
     const server = createUpapiMcpServer({ caller, surface: 'codemode' });
     expect(server).toBeDefined();
     expect(loaded.quickjs).toBe(false);
+    expect(loaded.emscripten).toBe(false);
   });
 
   it('the first execute_typescript call loads it and runs the program', async () => {
@@ -49,6 +56,7 @@ describe('@mastra/quickjs is loaded lazily', () => {
       expect(result.isError).not.toBe(true);
       expect(result.content[0]?.text).toContain('42');
       expect(loaded.quickjs).toBe(true);
+      expect(loaded.emscripten).toBe(true);
     } finally {
       await client.close();
       await server.close();

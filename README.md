@@ -177,9 +177,14 @@ await server.startStdio();
 - **`execute_typescript({ code })`** runs a short TypeScript program in an isolated QuickJS sandbox
   (`@mastra/quickjs`, another optional peer — no native binary, no filesystem/network/process
   access beyond the injected `external_*` functions). Batch several operations into one round trip
-  with `Promise.all` instead of one tool call each. Killed after 30 seconds. `@mastra/quickjs` is
-  loaded on the first `execute_typescript` call, so a server that never runs one (or uses the
-  `full` surface) does not need it installed.
+  with `Promise.all` instead of one tool call each. Killed after 30 seconds. A program that
+  computes for more than 1.5 seconds without awaiting an `external_*` call, or for more than 5
+  seconds in total across all such stretches, is stopped with
+  `CPU_BUDGET_EXCEEDED: ...`, because the sandbox shares the Node event loop with every other
+  request the process serves. Needs `quickjs-emscripten` `0.31.0` (the exact version
+  `@mastra/quickjs` 0.1.1 resolves) installed next to it. Both are loaded on the first
+  `execute_typescript` call, so a server that never runs one (or uses the `full` surface) does
+  not need them installed.
 
 Every `external_*` call resolves to the exact same `createUpapiTools(options)` tool object the
 `full` surface (below) calls — there is no second auth path. A denied or failed operation call

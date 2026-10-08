@@ -64,6 +64,14 @@ export type McpHttpOptions = CreateToolsOptions & {
   canExecute?: boolean | undefined;
   /** Whether this caller may SEARCH the catalog. Defaults to true. */
   canSearch?: boolean | undefined;
+  /**
+   * Called when a `tools/call` names a tool this request does not serve, just
+   * before the `NOT_FOUND` result goes back — so a client still calling a name
+   * from an older tool list leaves a trace instead of failing silently.
+   * Observability only: it cannot change the answer, and anything it throws is
+   * swallowed. `name` is caller-chosen; cap it before logging it.
+   */
+  onUnknownTool?: ((name: string, mode: McpToolMode) => void) | undefined;
 };
 
 /**
@@ -144,6 +152,19 @@ export function resolveToolMode(request: Request): McpToolMode {
   }
 }
 
+/** Runs the host's `onUnknownTool` hook; a failing hook never changes the answer. */
+function reportUnknownTool(
+  hook: McpHttpOptions['onUnknownTool'],
+  name: string,
+  mode: McpToolMode,
+): void {
+  try {
+    hook?.(name, mode);
+  } catch {
+    // Observability must not be able to fail a call.
+  }
+}
+
 /**
  * Serve one MCP request. Build the `caller` from the AUTHENTICATED identity of
  * this request and pass it in — that is the whole mechanism by which the hosted
@@ -211,7 +232,10 @@ export async function handleUpapiMcpRequest(
     // A tool the caller cannot see is reported as a failed CALL, not a protocol
     // error, and the text says nothing about why it is absent — the tool table
     // is already filtered to what this caller may invoke.
-    if (!spec) return toolNotFound(name);
+    if (!spec) {
+      reportUnknownTool(options.onUnknownTool, name, mode);
+      return toolNotFound(name);
+    }
     // A REAL tool withheld for lack of authorization says so, unlike an absent
     // one: this caller holds the token, so naming the reason costs no secret and
     // is the difference between "fix your grant" and "upAPI is broken".

@@ -74,7 +74,8 @@
   "peerDependencies": {
     "@mastra/core": "^1.68.0",
     "@mastra/mcp": "^1.18.0",
-    "@mastra/quickjs": "^0.1.1"
+    "@mastra/quickjs": "^0.1.1",
+    "quickjs-emscripten": "0.31.0"
   },
   "peerDependenciesMeta": {
     "@mastra/core": {
@@ -85,6 +86,9 @@
     },
     "@mastra/quickjs": {
       "optional": true
+    },
+    "quickjs-emscripten": {
+      "optional": true
     }
   },
   "devDependencies": {
@@ -92,6 +96,7 @@
     "@mastra/mcp": "^1.18.0",
     "@mastra/quickjs": "^0.1.1",
     "@types/node": "^22.10.2",
+    "quickjs-emscripten": "0.31.0",
     "rimraf": "^6.0.1",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "typescript-7": "npm:typescript@7.0.2",
