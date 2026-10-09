@@ -1,4 +1,4 @@
-import { createDirectoryEntries } from './directory.js';
+import { createClaudeEntries, createDirectoryEntries } from './directory.js';
 import { createFacadeEntries, type McpToolEntry } from './facade.js';
 import type { UpapiToolSpec } from './tools.js';
 
@@ -21,14 +21,17 @@ import type { UpapiToolSpec } from './tools.js';
  *  - `directory` — a curated set of NAMED tools, reads and writes separated,
  *    every tool annotated. The shape an AI marketplace's listing criteria ask
  *    for and the shape the Claude Desktop Extension ships; see `directory.ts`.
+ *    This is the ChatGPT listing.
+ *  - `claude` — the same shape over a narrower curated set: only operations
+ *    upAPI computes itself. This is the Claude listing; see `directory.ts`.
  *  - `full` — one tool per operation, the original table. Kept because an agent
  *    with a large context and a fixed workflow benefits from schemas being
  *    present without a discovery call, and because it is what existing
  *    connections were configured against.
  */
-export type McpToolMode = 'compact' | 'directory' | 'full';
+export type McpToolMode = 'compact' | 'directory' | 'claude' | 'full';
 
-const MODES: readonly McpToolMode[] = ['compact', 'directory', 'full'];
+const MODES: readonly McpToolMode[] = ['compact', 'directory', 'claude', 'full'];
 
 /** Narrow an untrusted string to a mode. Unknown values are NOT a mode. */
 export function parseToolMode(value: string | null | undefined): McpToolMode | undefined {
@@ -73,13 +76,14 @@ export function selectListedTools(
     return [...specs];
   }
 
-  if (mode === 'directory') {
+  if (mode === 'directory' || mode === 'claude') {
     // Named tools only, reads first. No `call_op`: a catch-all dispatcher with
     // a target parameter is the exact shape directory review criteria reject,
     // and `search_ops` without it would advertise discovery of operations this
     // table does not name. Both stay reachable at dispatch for a client that
     // already knows them — see the note above.
-    const { read, write } = createDirectoryEntries(specs);
+    const { read, write } =
+      mode === 'claude' ? createClaudeEntries(specs) : createDirectoryEntries(specs);
     return [...read, ...write];
   }
 

@@ -66,8 +66,8 @@ export function resolveStdioToolMode(env: NodeJS.ProcessEnv = process.env): McpT
  * An MCP server over stdio exposing upAPI's operations.
  *
  * Every mode serves the whole catalog, as the hosted transport does since
- * 2026-09-26; `directory` differs only in what it ADVERTISES (the curated
- * flagship set — see `directory.ts`).
+ * 2026-09-26; `directory` and `claude` differ only in what they ADVERTISE
+ * (curated listing sets — see `directory.ts`).
  */
 export function createUpapiStdioServer(options: CreateStdioServerOptions): Server {
   const mode = options.mode ?? 'compact';

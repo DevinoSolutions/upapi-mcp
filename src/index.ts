@@ -19,7 +19,8 @@
  *    and advertises a SMALLER table by default — the compact
  *    `search_ops`/`call_op` facade, with the per-op table of every public
  *    operation behind `?tools=full` and the curated, named, read/write-separated
- *    directory listing behind `?tools=directory`.
+ *    directory listing behind `?tools=directory` (and the narrower Claude
+ *    listing behind `?tools=claude`).
  *
  * Both get their operations from @upapi/sdk's generated catalog and differ only
  * in the injected `Caller`.
@@ -53,8 +54,11 @@ export {
 } from './stdio.js';
 
 export {
+  CLAUDE_LISTING_SLUGS,
+  createClaudeEntries,
   createDirectoryEntries,
   DIRECTORY_FLAGSHIP_SLUGS,
+  OWN_FILES_NOTICE,
   type DirectoryEntries,
 } from './directory.js';
 

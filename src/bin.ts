@@ -12,7 +12,8 @@ import { resolveStdioToolMode, startUpapiStdioServer } from './stdio.js';
  *   UPAPI_BASE_URL  (optional)  gateway origin; defaults to https://api.upapi.io
  *   UPAPI_TOOL_MODE (optional)  `compact` (default, `search_ops` + `call_op`),
  *                               `directory` (curated named tools, reads and
- *                               writes separated) or `full` (one tool per
+ *                               writes separated), `claude` (the narrower
+ *                               Claude listing) or `full` (one tool per
  *                               operation — the rollback for a client already
  *                               configured against it).
  *

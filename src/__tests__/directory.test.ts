@@ -2,7 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { OPERATIONS } from '@upapi/sdk';
 import { createUpapiToolSpecs, type Caller } from '../tools.js';
 import { CALL_OP_TOOL_NAME, SEARCH_OPS_TOOL_NAME } from '../facade.js';
-import { createDirectoryEntries, DIRECTORY_FLAGSHIP_SLUGS } from '../directory.js';
+import {
+  CLAUDE_LISTING_SLUGS,
+  createClaudeEntries,
+  createDirectoryEntries,
+  DIRECTORY_FLAGSHIP_SLUGS,
+  OWN_FILES_NOTICE,
+} from '../directory.js';
 import { handleUpapiMcpRequest, resolveToolMode } from '../http.js';
 
 /**
@@ -92,10 +98,10 @@ describe('the flagship list tracks the live catalog', () => {
     );
   });
 
-  it('is the 13 tools the listing copy quotes', () => {
-    // `apps/docs/content/docs/mcp-clients.mdx`, `packages/mcp/README.md` and the
-    // `.mcpb` manifest quote this number. A change here is a change there.
-    expect(DIRECTORY_FLAGSHIP_SLUGS).toHaveLength(13);
+  it('is the 11 tools the listing copy quotes', () => {
+    // `apps/docs/content/docs/mcp-clients.mdx` and `packages/mcp/README.md`
+    // quote this number. A change here is a change there.
+    expect(DIRECTORY_FLAGSHIP_SLUGS).toHaveLength(11);
   });
 });
 
@@ -220,5 +226,240 @@ describe('?tools=directory', () => {
       (tool) => tool.name,
     );
     expect(names).toEqual([SEARCH_OPS_TOOL_NAME]);
+  });
+});
+
+/**
+ * The two operations taken off BOTH listings on 2026-10-09 (owner decision).
+ * Listing only: they stay served, callable by name, and listed in `full`.
+ */
+const DELISTED_SLUGS: readonly string[] = ['github-user.get', 'ip-geolocation.get'];
+
+/** Proxy / bot-wall wording a listing must never carry, in prose or schema. */
+const PROXY_WORDING = /prox(y|ies|ied)|bot[ -]?wall|residential|datacenter|captcha/i;
+
+const LISTING_MODES = ['directory', 'claude'] as const;
+
+const OWN_FILES_SLUGS: readonly string[] = [
+  'image-ocr.post',
+  'pdf-extract-text.post',
+  'audio-transcribe.post',
+];
+
+function nameOf(slug: string): string {
+  const spec = SERVED.find((candidate) => candidate.slug === slug);
+  if (!spec) throw new Error(`not served: ${slug}`);
+  return spec.name;
+}
+
+type ListedToolWithSchema = ListedTool & { inputSchema: Record<string, unknown> };
+
+async function listToolsWithSchemas(search: string): Promise<ListedToolWithSchema[]> {
+  return (await listTools(search)) as ListedToolWithSchema[];
+}
+
+/** `isError` of a by-name call with empty arguments; `undefined` means it ran. */
+async function callByName(name: string, search: string): Promise<boolean | undefined> {
+  const res = await handleUpapiMcpRequest(
+    rpc({ jsonrpc: '2.0', id: 9, method: 'tools/call', params: { name, arguments: {} } }, search),
+    { caller: noopCaller },
+  );
+  const parsed = JSON.parse(await res.text()) as { result: { isError?: boolean } };
+  return parsed.result.isError;
+}
+
+describe('the two listing sets, pinned', () => {
+  it('the ChatGPT directory listing is exactly these 11 operations', () => {
+    expect([...DIRECTORY_FLAGSHIP_SLUGS]).toEqual([
+      'fetch-markdown.post',
+      'screenshot.post',
+      'html-to-pdf.post',
+      'pdf-extract-text.post',
+      'image-ocr.post',
+      'audio-transcribe.post',
+      'audio-transcribe-result.get',
+      'github-repo.get',
+      'npm-package.get',
+      'wikipedia-article.get',
+      'currency-convert.get',
+    ]);
+  });
+
+  it('the Claude listing is exactly the operations upAPI computes itself', () => {
+    expect([...CLAUDE_LISTING_SLUGS]).toEqual([
+      'fetch-markdown.post',
+      'screenshot.post',
+      'html-to-pdf.post',
+      'pdf-extract-text.post',
+      'image-ocr.post',
+      'audio-transcribe.post',
+      'audio-transcribe-result.get',
+      'text-analyze.post',
+    ]);
+    const known = new Set(OPERATIONS.map((op) => op.slug));
+    expect(CLAUDE_LISTING_SLUGS.filter((slug) => !known.has(slug))).toEqual([]);
+    expect(new Set(CLAUDE_LISTING_SLUGS).size).toBe(CLAUDE_LISTING_SLUGS.length);
+  });
+
+  it('neither listing names github-user or ip-geolocation, and both stay in the catalog', () => {
+    const served = new Set(SERVED.map((spec) => spec.slug));
+    for (const slug of DELISTED_SLUGS) {
+      expect(served.has(slug), slug).toBe(true);
+      expect(DIRECTORY_FLAGSHIP_SLUGS, slug).not.toContain(slug);
+      expect(CLAUDE_LISTING_SLUGS, slug).not.toContain(slug);
+    }
+  });
+
+  it('the Claude listing keeps the scraped-source operations off too', () => {
+    expect(CLAUDE_LISTING_SLUGS.filter((slug) => SCRAPED_SOURCE_SLUGS.includes(slug))).toEqual([]);
+  });
+
+  it('createClaudeEntries covers every Claude slug once, split on the read hint', () => {
+    const { read, write } = createClaudeEntries(SERVED);
+    expect([...read, ...write].map((entry) => entry.name).sort()).toEqual(
+      CLAUDE_LISTING_SLUGS.map(nameOf).sort(),
+    );
+    for (const entry of read) expect(entry.annotations.readOnlyHint).toBe(true);
+    expect(write.length).toBeGreaterThan(0);
+    for (const entry of write) expect(entry.annotations.readOnlyHint).toBe(false);
+  });
+});
+
+describe('?tools=claude', () => {
+  it('is a mode the URL can select, on the exact hosted path', () => {
+    const request = rpc({}, '?tools=claude');
+    expect(new URL(request.url).pathname).toBe('/api/mcp');
+    expect(resolveToolMode(request)).toBe('claude');
+  });
+
+  it('advertises exactly the Claude tools, reads before writes, with no dispatcher', async () => {
+    const names = (await listTools('?tools=claude')).map((tool) => tool.name);
+    const { read, write } = createClaudeEntries(SERVED);
+    expect(names).toEqual([...read, ...write].map((entry) => entry.name));
+    expect([...names].sort()).toEqual(CLAUDE_LISTING_SLUGS.map(nameOf).sort());
+    expect(names).not.toContain(CALL_OP_TOOL_NAME);
+    expect(names).not.toContain(SEARCH_OPS_TOOL_NAME);
+  });
+
+  it('states all four hints, a title and a description on every tool', async () => {
+    for (const tool of await listTools('?tools=claude')) {
+      expect(tool.title, tool.name).toBeTruthy();
+      expect(tool.description, tool.name).toBeTruthy();
+      expect(tool.annotations, tool.name).toEqual({
+        readOnlyHint: expect.any(Boolean),
+        destructiveHint: expect.any(Boolean),
+        idempotentHint: expect.any(Boolean),
+        openWorldHint: expect.any(Boolean),
+      });
+    }
+  });
+
+  it('advertises nothing executable to a caller that may not execute', async () => {
+    const names = (await listTools('?tools=claude', { canExecute: false })).map(
+      (tool) => tool.name,
+    );
+    expect(names).toEqual([SEARCH_OPS_TOOL_NAME]);
+  });
+});
+
+describe('listing wording', () => {
+  it.each(LISTING_MODES)(
+    '?tools=%s carries no proxy or bot-wall wording in any title, description or schema',
+    async (mode) => {
+      const tools = await listToolsWithSchemas(`?tools=${mode}`);
+      expect(tools.length).toBeGreaterThan(0);
+      for (const tool of tools) {
+        expect(tool.title ?? '', tool.name).not.toMatch(PROXY_WORDING);
+        expect(tool.description ?? '', tool.name).not.toMatch(PROXY_WORDING);
+        expect(JSON.stringify(tool.inputSchema), tool.name).not.toMatch(PROXY_WORDING);
+      }
+    },
+  );
+
+  it.each(LISTING_MODES)(
+    '?tools=%s appends the own-files notice to OCR, PDF text and transcription only',
+    async (mode) => {
+      const noticed = new Set(OWN_FILES_SLUGS.map(nameOf));
+      const tools = await listTools(`?tools=${mode}`);
+      for (const name of noticed) expect(tools.map((tool) => tool.name)).toContain(name);
+      for (const tool of tools) {
+        if (noticed.has(tool.name)) {
+          expect(tool.description, tool.name).toContain(OWN_FILES_NOTICE);
+          // The slug/cost sentence still closes the description, as in every mode.
+          expect(tool.description, tool.name).toMatch(
+            /Costs \d+ units? of monthly quota per call\.$/,
+          );
+        } else {
+          expect(tool.description, tool.name).not.toContain(OWN_FILES_NOTICE);
+        }
+      }
+    },
+  );
+
+  it('rewords the listings only: the catalog and full mode keep their own text', async () => {
+    // The API docs and the other modes are generated from the catalog, so the
+    // catalog itself must be untouched — the override lives in directory.ts.
+    const fullTools = await listToolsWithSchemas('?tools=full');
+    const fetchMarkdown = SERVED.find((spec) => spec.slug === 'fetch-markdown.post')!;
+    const catalog = OPERATIONS.find((op) => op.slug === 'fetch-markdown.post')!;
+    expect(fetchMarkdown.summary).toBe(catalog.description);
+    const full = fullTools.find((tool) => tool.name === fetchMarkdown.name)!;
+    expect(full.description).toBe(fetchMarkdown.description);
+    expect(full.inputSchema).toEqual(fetchMarkdown.inputSchema);
+    for (const slug of OWN_FILES_SLUGS) {
+      const spec = SERVED.find((candidate) => candidate.slug === slug)!;
+      const listed = fullTools.find((tool) => tool.name === spec.name)!;
+      expect(listed.description, slug).toBe(spec.description);
+      expect(listed.description, slug).not.toContain(OWN_FILES_NOTICE);
+    }
+  });
+
+  it('keeps every listed input schema identical to the served one but for descriptions', async () => {
+    // A listing must never advertise an input the operation would validate
+    // differently: only property DESCRIPTIONS may be reworded.
+    const strip = (schema: unknown): unknown =>
+      JSON.parse(JSON.stringify(schema), (key: string, value: unknown) =>
+        key === 'description' ? undefined : value,
+      ) as unknown;
+    for (const mode of LISTING_MODES) {
+      for (const tool of await listToolsWithSchemas(`?tools=${mode}`)) {
+        const spec = SERVED.find((candidate) => candidate.name === tool.name)!;
+        expect(strip(tool.inputSchema), tool.name).toEqual(strip(spec.inputSchema));
+      }
+    }
+  });
+});
+
+describe('what the listings do NOT change', () => {
+  it('the default (compact) surface is unchanged', async () => {
+    expect((await listTools('')).map((tool) => tool.name)).toEqual([
+      SEARCH_OPS_TOOL_NAME,
+      CALL_OP_TOOL_NAME,
+      'web_search_post',
+      'github_repo_get',
+      'wikipedia_article_get',
+    ]);
+  });
+
+  it('full still lists every operation, the delisted two included', async () => {
+    const names = (await listTools('?tools=full')).map((tool) => tool.name);
+    expect([...names].sort()).toEqual(OPERATIONS.map((op) => op.operationId).sort());
+    for (const slug of DELISTED_SLUGS) expect(names, slug).toContain(nameOf(slug));
+  });
+
+  it.each(['', '?tools=full', '?tools=directory', '?tools=claude'])(
+    'github-user and ip-geolocation stay callable by name on "%s"',
+    async (search) => {
+      for (const slug of DELISTED_SLUGS) {
+        expect(await callByName(nameOf(slug), search), slug).not.toBe(true);
+      }
+    },
+  );
+
+  it('an operation outside the Claude listing stays callable by name on ?tools=claude', async () => {
+    const unlisted = SERVED.find((spec) => !CLAUDE_LISTING_SLUGS.includes(spec.slug))!;
+    expect(await callByName(unlisted.name, '?tools=claude')).not.toBe(true);
+    const listed = (await listTools('?tools=claude'))[0]!.name;
+    expect(await callByName(listed, '?tools=claude')).not.toBe(true);
   });
 });

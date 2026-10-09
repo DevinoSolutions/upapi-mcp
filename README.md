@@ -52,11 +52,11 @@ Claude Desktop (`claude_desktop_config.json`), Cursor, and Windsurf take the sam
 }
 ```
 
-| Variable          |          |                                                        |
-| ----------------- | -------- | ------------------------------------------------------ |
-| `UPAPI_API_KEY`   | required | an `upapi_` key                                        |
-| `UPAPI_BASE_URL`  | optional | gateway origin, defaults to `https://api.upapi.io`     |
-| `UPAPI_TOOL_MODE` | optional | `compact` (default), `directory` or `full` — see Tools |
+| Variable          |          |                                                                  |
+| ----------------- | -------- | ---------------------------------------------------------------- |
+| `UPAPI_API_KEY`   | required | an `upapi_` key                                                  |
+| `UPAPI_BASE_URL`  | optional | gateway origin, defaults to `https://api.upapi.io`               |
+| `UPAPI_TOOL_MODE` | optional | `compact` (default), `directory`, `claude` or `full` — see Tools |
 
 The key is never validated locally — only checked for presence, so a missing one fails
 immediately with a readable message instead of surfacing later as an unexplained 401 inside a
@@ -85,18 +85,20 @@ There are two other tables. `?tools=full` gives every operation its own tool:
 claude mcp add --transport http upapi 'https://app.upapi.io/api/mcp?tools=full'
 ```
 
-`?tools=directory` gives a curated set of 13 **named** tools for the flagship operations —
-page-to-Markdown, screenshot, HTML-to-PDF, PDF text, OCR, transcription, GitHub repo/user, npm
-package, IP geolocation, Wikipedia, currency — with read tools and write tools listed separately
+`?tools=directory` gives a curated set of 11 **named** tools for the flagship operations —
+page-to-Markdown, screenshot, HTML-to-PDF, PDF text, OCR, transcription, GitHub repo, npm
+package, Wikipedia, currency — with read tools and write tools listed separately
 and no `call_op`. That is the shape AI-directory review criteria ask for (a catch-all dispatcher
 with a target parameter is a rejection, and so is a listing that advertises scraped sources, which
 is why the Maps trio and web search stay callable but are not listed there), and it is what the
-Claude Desktop Extension ships with. The local stdio server takes the same three names in `UPAPI_TOOL_MODE`,
+Claude Desktop Extension ships with. `?tools=claude` is the same shape over the 8 operations upAPI
+computes itself (page-to-Markdown, screenshot, HTML-to-PDF, PDF text, OCR, transcription and its
+result, text analysis) — the Claude connector listing. The local stdio server takes the same names in `UPAPI_TOOL_MODE`,
 defaulting to `compact` — the same few-kilobyte shape the hosted endpoint defaults to. `full`
 remains available (`UPAPI_TOOL_MODE=full`) as the rollback for a client already configured
 against the one-tool-per-operation shape this server used to default to.
 
-All three modes reach exactly the same operations — the mode changes what is advertised, never
+Every mode reaches exactly the same operations — the mode changes what is advertised, never
 what is allowed. Every tool in every mode carries `readOnlyHint`, `destructiveHint`,
 `idempotentHint` and `openWorldHint`, derived from what the worker does rather than from the
 slug's verb suffix. Operations are named after their slug with `.` and `-` replaced by `_`

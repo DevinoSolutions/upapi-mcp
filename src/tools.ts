@@ -513,8 +513,22 @@ export type UpapiToolSpec = {
  * against the caller's quota.
  */
 function describe(op: OperationMeta): string {
+  return describeTool(op.description, op);
+}
+
+/**
+ * A tool description from an operation summary plus the slug/cost sentence.
+ *
+ * Exported so a listing that rewords an operation's summary (see
+ * `directory.ts`) still ends in the exact sentence every other mode carries,
+ * instead of a second copy of the format that could drift from this one.
+ */
+export function describeTool(
+  summary: string,
+  op: { slug: string; category: string; unitWeight: number },
+): string {
   const cost = op.unitWeight === 1 ? '1 unit' : `${op.unitWeight} units`;
-  return `${op.description}\n\nupAPI operation \`${op.slug}\` (${op.category}). Costs ${cost} of monthly quota per call.`;
+  return `${summary}\n\nupAPI operation \`${op.slug}\` (${op.category}). Costs ${cost} of monthly quota per call.`;
 }
 
 /**

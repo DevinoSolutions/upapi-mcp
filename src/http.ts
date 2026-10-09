@@ -30,12 +30,13 @@ import { SERVER_NAME, SERVER_VERSION } from './meta.js';
  * their access token on EVERY request, so a tool can never execute against a
  * session that outlived the token that opened it.
  *
- * THREE TOOL TABLES, ONE ACCESS DECISION. `?tools=full` serves one tool per
- * operation; `?tools=directory` serves the curated, named, read/write-separated
- * listing an AI marketplace reviews (see `directory.ts`); the default serves the
- * compact facade (`search_ops` + `call_op` + a few always-on operations) so a
+ * FOUR TOOL TABLES, ONE ACCESS DECISION. `?tools=full` serves one tool per
+ * operation; `?tools=directory` (the ChatGPT listing) and `?tools=claude` (the
+ * Claude listing) serve curated, named, read/write-separated listings an AI
+ * marketplace reviews (see `directory.ts`); the default serves the compact
+ * facade (`search_ops` + `call_op` + a few always-on operations) so a
  * connection does not re-send tens of kilobytes of JSON Schema on every turn.
- * All three are built from the SAME filtered `specs` by the SAME
+ * All four are built from the SAME filtered `specs` by the SAME
  * `selectListedTools`, so the mode changes what is ADVERTISED and never what is
  * reachable.
  *
@@ -114,8 +115,11 @@ export {
 } from './facade.js';
 
 export {
+  CLAUDE_LISTING_SLUGS,
+  createClaudeEntries,
   createDirectoryEntries,
   DIRECTORY_FLAGSHIP_SLUGS,
+  OWN_FILES_NOTICE,
   type DirectoryEntries,
 } from './directory.js';
 
@@ -129,7 +133,8 @@ export {
 export { formatToolFailure, toToolFailure, type ToolFailure } from './errors.js';
 
 /**
- * The mode a request asks for: `?tools=full`, `?tools=directory`, else compact.
+ * The mode a request asks for: `?tools=full`, `?tools=directory`,
+ * `?tools=claude`, else compact.
  *
  * A query parameter rather than a header or a separate route because an MCP
  * client is configured with ONE URL and re-sends it verbatim; anything that
