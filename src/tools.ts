@@ -57,7 +57,7 @@ export type McpToolAnnotations = {
 };
 
 /**
- * The six behavioural classes the 100 published operations fall into.
+ * The six behavioural classes the published operations (nearly 100) fall into.
  *
  * `openWorldHint` is `true` in five of the six, and that is not a shortcut: upAPI is
  * an API marketplace, so EVERY published operation exists to reach a system
@@ -259,7 +259,7 @@ const LOCAL_COMPUTE: McpToolAnnotations = {
  * `packages/mcp/src/__tests__/tools.test.ts` pins the same invariant at runtime.
  */
 export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnotations>> = {
-  // ── Third-party reads (91) ────────────────────────────────────────────────
+  // ── Third-party reads (90) ────────────────────────────────────────────────
   'archive-wayback.get': THIRD_PARTY_READ,
   // Renders/reads a caller-named page or document and writes nothing anywhere.
   // The three render ops (screenshot, html-to-pdf, fetch-markdown) hold a real
@@ -419,13 +419,6 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
   'wellfound-search-jobs.post': THIRD_PARTY_READ,
   'wellfound-viewer.post': THIRD_PARTY_READ,
   'wikipedia-article.get': THIRD_PARTY_READ,
-  // 2026-09-23: `youtube-get-transcript.get` fetches a video's captions off
-  // YouTube's own transcript endpoint via `youtube-transcript-api` and writes
-  // nothing — no API key, no quota, no account. A video without captions comes
-  // back as a successful empty transcript rather than an error (mirrors the
-  // upstream `youtube-lead-gen/transcript.py` fallback), so the same input
-  // yields the same shape on every call.
-  'youtube-get-transcript.get': THIRD_PARTY_READ,
 
   // ── Mailbox reads, live-credential/mailbox side effects (3) ───────────────
   'email-read-verification-code.post': MAILBOX_READ,
