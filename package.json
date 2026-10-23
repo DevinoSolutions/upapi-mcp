@@ -2,7 +2,7 @@
   "name": "@upapi/mcp",
   "version": "0.2.0",
   "mcpName": "io.github.DevinoSolutions/upapi-mcp",
-  "description": "Every public upAPI operation as an MCP tool — a local stdio server (upapi-mcp) and a handler for hosting MCP over streamable HTTP.",
+  "description": "upAPI (upapi.io) MCP server: every public operation of the upAPI API marketplace as an MCP tool, as a local stdio server (upapi-mcp) and a handler for hosting MCP over streamable HTTP.",
   "keywords": [
     "upapi",
     "mcp",
@@ -10,7 +10,10 @@
     "ai",
     "agent",
     "tools",
-    "mastra"
+    "mastra",
+    "upapi.io",
+    "api-marketplace",
+    "mcp-server"
   ],
   "license": "MIT",
   "homepage": "https://upapi.io/docs/mcp",
