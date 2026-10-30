@@ -12,6 +12,8 @@ import {
   SEARCH_OPS_TOOL_NAME,
 } from './facade.js';
 import { parseToolMode, selectListedTools, type McpToolMode } from './table.js';
+import { createAccountToolEntries, type AccountCaller } from './account-tools.js';
+import type { Tier } from './tiers.js';
 import { SERVER_NAME, SERVER_VERSION } from './meta.js';
 
 /**
@@ -48,6 +50,10 @@ import { SERVER_NAME, SERVER_VERSION } from './meta.js';
  */
 
 export type McpHttpOptions = CreateToolsOptions & {
+  /** Runs account-surface tools. Absent = no account tools are listed or served. */
+  accountCaller?: AccountCaller | undefined;
+  /** Tiers this connection holds; account tools outside them are refused before the caller runs. */
+  tiers?: ReadonlySet<Tier> | undefined;
   name?: string | undefined;
   version?: string | undefined;
   /** Overrides the `?tools=` query parameter. Defaults to `resolveToolMode(request)`. */
@@ -130,7 +136,20 @@ export {
   type SelectListedToolsOptions,
 } from './table.js';
 
+export {
+  createAccountToolEntries,
+  ACCOUNT_TOOL_DEFS,
+  type AccountCaller,
+} from './account-tools.js';
 export { formatToolFailure, toToolFailure, type ToolFailure } from './errors.js';
+export {
+  denial,
+  DenialError,
+  renderDenial,
+  withDefaultNext,
+  type Denial,
+  type DenialCode,
+} from './denial.js';
 
 /**
  * The mode a request asks for: `?tools=full`, `?tools=directory`,
@@ -186,7 +205,16 @@ export async function handleUpapiMcpRequest(
 
   // What tools/list ADVERTISES. Dispatch below is deliberately wider — see
   // `selectListedTools`, which owns this decision for both transports.
-  const listed = selectListedTools(specs, { mode, canExecute, canSearch });
+  const accountEntries = options.accountCaller
+    ? createAccountToolEntries({ caller: options.accountCaller, tiers: options.tiers })
+    : [];
+  const accountByName = new Map(accountEntries.map((e) => [e.name, e]));
+  const listed = selectListedTools(specs, {
+    mode,
+    canExecute,
+    canSearch,
+    accountTools: accountEntries,
+  });
 
   const server = new Server(
     { name: options.name ?? SERVER_NAME, version: options.version ?? SERVER_VERSION },
@@ -219,6 +247,9 @@ export async function handleUpapiMcpRequest(
     if (name === CALL_OP_TOOL_NAME) {
       return canExecute ? call.call(args) : toolForbidden(EXECUTE_FORBIDDEN_MESSAGE);
     }
+
+    const accountTool = accountByName.get(name);
+    if (accountTool) return accountTool.call(args);
 
     const spec = byName.get(name);
     // A tool the caller cannot see is reported as a failed CALL, not a protocol

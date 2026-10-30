@@ -46,7 +46,7 @@ describe('a tools/call for a tool this request does not serve', () => {
     expect(onUnknownTool).toHaveBeenCalledTimes(1);
     expect(onUnknownTool).toHaveBeenCalledWith('invoices_list', 'compact');
     expect(result.isError).toBe(true);
-    expect(result.content[0]?.text).toBe('NOT_FOUND: unknown tool "invoices_list"');
+    expect(JSON.parse(result.content[0]!.text).message).toBe('Unknown tool "invoices_list".');
   });
 
   it('reports the mode the request asked for', async () => {
@@ -65,13 +65,13 @@ describe('a tools/call for a tool this request does not serve', () => {
     });
 
     expect(result.isError).toBe(true);
-    expect(result.content[0]?.text).toBe('NOT_FOUND: unknown tool "invoices_list"');
+    expect(JSON.parse(result.content[0]!.text).message).toBe('Unknown tool "invoices_list".');
   });
 
   it('answers NOT_FOUND unchanged when the host passes no hook', async () => {
     const result = await call('invoices_list');
 
-    expect(result.content[0]?.text).toBe('NOT_FOUND: unknown tool "invoices_list"');
+    expect(JSON.parse(result.content[0]!.text).message).toBe('Unknown tool "invoices_list".');
   });
 });
 
@@ -90,7 +90,7 @@ describe('a tools/call for a served tool', () => {
 
     const result = await call('call_op', { onUnknownTool, canExecute: false });
 
-    expect(result.content[0]?.text).toMatch(/^FORBIDDEN: /);
+    expect(result.content[0]?.text).toMatch(/SCOPE_MISSING/);
     expect(onUnknownTool).not.toHaveBeenCalled();
   });
 });

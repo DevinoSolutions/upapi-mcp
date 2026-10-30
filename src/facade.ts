@@ -1,4 +1,6 @@
 import type { McpToolAnnotations, ToolCallResult, UpapiToolSpec } from './tools.js';
+import type { Tier } from './tiers.js';
+import { renderDenial } from './denial.js';
 
 /**
  * The COMPACT tool surface: `search_ops` + `call_op` instead of one tool per
@@ -70,6 +72,8 @@ export type McpToolEntry = {
   description: string;
   inputSchema: Record<string, unknown>;
   annotations: McpToolAnnotations;
+  /** Permission tier this tool needs (`search_ops` reads, `call_op` spends quota). */
+  tier: Tier;
   call: (input: unknown) => Promise<ToolCallResult>;
 };
 
@@ -82,22 +86,26 @@ export type McpToolEntry = {
  * table is already filtered to what this caller may invoke.
  */
 export function toolNotFound(name: string): ToolCallResult {
-  return {
-    content: [{ type: 'text' as const, text: `NOT_FOUND: unknown tool "${name}"` }],
-    isError: true,
-  };
+  return renderDenial({
+    code: 'NOT_FOUND',
+    message: `Unknown tool "${name}".`,
+    next: { tool: SEARCH_OPS_TOOL_NAME },
+  });
 }
 
 /** Refusal for a tool this connection is authenticated for but not authorized to use. */
 export function toolForbidden(message: string): ToolCallResult {
-  return {
-    content: [{ type: 'text' as const, text: `FORBIDDEN: ${message}` }],
-    isError: true,
-  };
+  return renderDenial({
+    code: 'SCOPE_MISSING',
+    message: `This connection lacks permission: ${message}`,
+    next: { tool: 'request_scopes', args: { tiers: ['write'] } },
+  });
 }
 
-export const EXECUTE_FORBIDDEN_MESSAGE = 'this connection is not authorized to run operations.';
-export const SEARCH_FORBIDDEN_MESSAGE = 'this connection is not authorized to search the catalog.';
+export const EXECUTE_FORBIDDEN_MESSAGE =
+  'running operations needs the "Create and edit" permission.';
+export const SEARCH_FORBIDDEN_MESSAGE =
+  'searching the catalog needs the "Read your data" permission.';
 
 /**
  * `search_ops` reads an in-process table built from the SDK catalog at import
@@ -456,6 +464,7 @@ export function createFacadeEntries(specs: readonly UpapiToolSpec[]): {
       `\`${CALL_OP_TOOL_NAME}\`.`,
     inputSchema: SEARCH_INPUT_SCHEMA,
     annotations: SEARCH_ANNOTATIONS,
+    tier: 'read',
     call: async (input: unknown): Promise<ToolCallResult> => {
       const args = readSearchArgs(input);
       const { total, matches, matchedEveryTerm } = searchSpecs(specs, args);
@@ -481,6 +490,7 @@ export function createFacadeEntries(specs: readonly UpapiToolSpec[]): {
       "upAPI's error code, not as a broken session.",
     inputSchema: CALL_INPUT_SCHEMA,
     annotations: CALL_ANNOTATIONS,
+    tier: 'write',
     call: async (input: unknown): Promise<ToolCallResult> => {
       const raw = (typeof input === 'object' && input !== null ? input : {}) as Record<
         string,

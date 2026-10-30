@@ -85,4 +85,18 @@ export {
 
 export { createGatewayCaller } from './caller.js';
 
+export {
+  createAccountToolEntries,
+  ACCOUNT_TOOL_DEFS,
+  type AccountCaller,
+} from './account-tools.js';
+export { createGatewayAccountCaller } from './caller.js';
 export { formatToolFailure, toToolFailure, type ToolFailure } from './errors.js';
+export {
+  denial,
+  DenialError,
+  renderDenial,
+  withDefaultNext,
+  type Denial,
+  type DenialCode,
+} from './denial.js';

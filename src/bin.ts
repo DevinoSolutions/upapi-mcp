@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createGatewayCaller } from './caller.js';
+import { createGatewayAccountCaller, createGatewayCaller } from './caller.js';
 import { resolveStdioToolMode, startUpapiStdioServer } from './stdio.js';
 
 /**
@@ -32,7 +32,8 @@ async function main(): Promise<void> {
   if (!apiKey) {
     process.stderr.write(
       'upapi-mcp: UPAPI_API_KEY is not set.\n' +
-        '  Create a key at https://app.upapi.io/dashboard/api-keys and pass it to the server, e.g.\n' +
+        '  Connect the hosted server (claude mcp add --transport http upapi https://app.upapi.io/api/mcp),\n' +
+        '  ask your agent to run create_api_key, then pass the key to this server, e.g.\n' +
         '    claude mcp add upapi -e UPAPI_API_KEY=upapi_... -- npx -y @upapi/mcp\n',
     );
     process.exit(1);
@@ -41,6 +42,7 @@ async function main(): Promise<void> {
   const baseUrl = process.env['UPAPI_BASE_URL'];
   await startUpapiStdioServer({
     caller: createGatewayCaller({ apiKey, ...(baseUrl ? { baseUrl } : {}) }),
+    accountCaller: createGatewayAccountCaller({ apiKey, baseUrl }),
     mode: resolveStdioToolMode(),
   });
 }

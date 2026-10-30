@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.DevinoSolutions/upapi-mcp",
   "title": "upAPI",
-  "description": "All public upAPI operations as MCP tools: web scraping, search, screenshots, PDF, OCR and more.",
+  "description": "upAPI operations and account management as MCP tools: search, scraping, PDF, OCR, billing, keys.",
   "repository": {
     "url": "https://github.com/DevinoSolutions/upapi-mcp",
     "source": "github"
@@ -51,7 +51,7 @@
       "environmentVariables": [
         {
           "name": "UPAPI_API_KEY",
-          "description": "upAPI API key (create one at https://app.upapi.io/dashboard/api-keys)",
+          "description": "upAPI API key (starts with upapi_). No key yet? Connect the hosted server and ask your agent to run create_api_key.",
           "isRequired": true,
           "isSecret": true,
           "format": "string"

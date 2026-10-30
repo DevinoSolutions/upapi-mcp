@@ -44,7 +44,7 @@ claude mcp add --transport http upapi https://app.upapi.io/api/mcp
 
 ## Local — API key
 
-Create a key at [app.upapi.io → API Keys](https://app.upapi.io/dashboard/api-keys), then:
+Create a key by asking your agent to run `create_api_key` over the hosted connection, or on the [API keys page](https://app.upapi.io/dashboard/api-keys), then:
 
 ```bash
 claude mcp add upapi -e UPAPI_API_KEY=upapi_xxx -- npx -y @upapi/mcp

@@ -261,7 +261,11 @@ describe('call_op is the per-op path, reached by slug', () => {
   it('refuses an unknown slug without saying anything about why', async () => {
     const result = await callTool(CALL_OP_TOOL_NAME, { slug: 'no-such-op.get' });
     expect(result.isError).toBe(true);
-    expect(result.content[0]?.text).toBe('NOT_FOUND: unknown tool "no-such-op.get"');
+    expect(JSON.parse(result.content[0]!.text)).toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'Unknown tool "no-such-op.get".',
+      next: { tool: 'search_ops' },
+    });
   });
 
   it("surfaces an operation failure as a tool error carrying upAPI's code", async () => {
@@ -275,7 +279,7 @@ describe('call_op is the per-op path, reached by slug', () => {
     const result = await callTool(CALL_OP_TOOL_NAME, { slug: OPERATIONS[0]!.slug }, { caller });
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toContain('RATE_LIMITED');
-    expect(result.content[0]?.text).toContain('Retry after 60 seconds');
+    expect(result.content[0]?.text).toContain('"retryAfterSeconds":60');
   });
 
   it('still runs a served operation that compact mode does not list', async () => {
@@ -343,7 +347,7 @@ describe('authorization narrows the table, in both modes', () => {
     ]) {
       const result = await attempt;
       expect(result.isError).toBe(true);
-      expect(result.content[0]?.text).toContain('FORBIDDEN');
+      expect(result.content[0]?.text).toContain('SCOPE_MISSING');
     }
     expect(caller).not.toHaveBeenCalled();
   });
@@ -353,7 +357,7 @@ describe('authorization narrows the table, in both modes', () => {
     expect(tools.map((t) => t.name)).not.toContain(SEARCH_OPS_TOOL_NAME);
     const result = await callTool(SEARCH_OPS_TOOL_NAME, { query: '' }, { canSearch: false });
     expect(result.isError).toBe(true);
-    expect(result.content[0]?.text).toContain('FORBIDDEN');
+    expect(result.content[0]?.text).toContain('SCOPE_MISSING');
   });
 
   it('grants both by default, so a host with no scope model is unaffected', async () => {

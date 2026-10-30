@@ -10,6 +10,7 @@ import {
 } from './facade.js';
 import { parseToolMode, selectListedTools, type McpToolMode } from './table.js';
 import { SERVER_NAME, SERVER_VERSION } from './meta.js';
+import { createAccountToolEntries, type AccountCaller } from './account-tools.js';
 
 /**
  * MCP over stdio — the local server the `upapi-mcp` bin runs, and the server a
@@ -38,6 +39,8 @@ import { SERVER_NAME, SERVER_VERSION } from './meta.js';
  */
 
 export type CreateStdioServerOptions = CreateToolsOptions & {
+  /** Runs account-surface tools through the gateway. Absent = none are listed. */
+  accountCaller?: AccountCaller | undefined;
   name?: string | undefined;
   version?: string | undefined;
   /**
@@ -74,7 +77,16 @@ export function createUpapiStdioServer(options: CreateStdioServerOptions): Serve
   const specs = createUpapiToolSpecs(options);
   const byName = new Map(specs.map((spec) => [spec.name, spec]));
   const { search, call } = createFacadeEntries(specs);
-  const listed = selectListedTools(specs, { mode, canExecute: true, canSearch: true });
+  const accountEntries = options.accountCaller
+    ? createAccountToolEntries({ caller: options.accountCaller })
+    : [];
+  const accountByName = new Map(accountEntries.map((e) => [e.name, e]));
+  const listed = selectListedTools(specs, {
+    mode,
+    canExecute: true,
+    canSearch: true,
+    accountTools: accountEntries,
+  });
 
   const server = new Server(
     { name: options.name ?? SERVER_NAME, version: options.version ?? SERVER_VERSION },
@@ -104,6 +116,9 @@ export function createUpapiStdioServer(options: CreateStdioServerOptions): Serve
     // anyway — and nothing more, since `call_op` resolves against these specs.
     if (name === SEARCH_OPS_TOOL_NAME) return search.call(args);
     if (name === CALL_OP_TOOL_NAME) return call.call(args);
+
+    const accountTool = accountByName.get(name);
+    if (accountTool) return accountTool.call(args);
 
     const spec = byName.get(name);
     if (!spec) return toolNotFound(name);

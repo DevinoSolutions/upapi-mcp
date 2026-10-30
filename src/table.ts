@@ -44,6 +44,8 @@ export type SelectListedToolsOptions = {
   canExecute: boolean;
   /** Whether this caller may SEARCH the catalog. */
   canSearch: boolean;
+  /** Account-surface tools (billing, team, keys, ...). They carry their own tiers, so they list regardless of `canExecute`. */
+  accountTools?: readonly McpToolEntry[] | undefined;
 };
 
 /**
@@ -61,19 +63,20 @@ export function selectListedTools(
   options: SelectListedToolsOptions,
 ): McpToolEntry[] {
   const { mode, canExecute, canSearch } = options;
+  const account = options.accountTools ?? [];
   const { search, call, alwaysOn } = createFacadeEntries(specs);
 
   if (!canExecute) {
     // Nothing executable may be advertised. Whichever mode was asked for, the
     // search facade is all that is left — listing tools this caller cannot run
     // would cost a tool call to discover the refusal.
-    return canSearch ? [search] : [];
+    return [...(canSearch ? [search] : []), ...account];
   }
 
   if (mode === 'full') {
     // Exactly the per-op table, with no facade: full mode's premise is that
     // every schema is already present, so a discovery tool is dead weight.
-    return [...specs];
+    return [...specs, ...account];
   }
 
   if (mode === 'directory' || mode === 'claude') {
@@ -84,11 +87,11 @@ export function selectListedTools(
     // already knows them — see the note above.
     const { read, write } =
       mode === 'claude' ? createClaudeEntries(specs) : createDirectoryEntries(specs);
-    return [...read, ...write];
+    return [...read, ...write, ...account];
   }
 
   const listed: McpToolEntry[] = [];
   if (canSearch) listed.push(search);
-  listed.push(call, ...alwaysOn);
+  listed.push(call, ...alwaysOn, ...account);
   return listed;
 }

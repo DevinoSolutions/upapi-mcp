@@ -49,6 +49,18 @@
       "types": "./dist/tool-names.d.ts",
       "default": "./dist/tool-names.js"
     },
+    "./account-tools": {
+      "types": "./dist/account-tools.d.ts",
+      "default": "./dist/account-tools.js"
+    },
+    "./denial": {
+      "types": "./dist/denial.d.ts",
+      "default": "./dist/denial.js"
+    },
+    "./tiers": {
+      "types": "./dist/tiers.d.ts",
+      "default": "./dist/tiers.js"
+    },
     "./mastra": {
       "types": "./dist/mastra.d.ts",
       "default": "./dist/mastra.js"

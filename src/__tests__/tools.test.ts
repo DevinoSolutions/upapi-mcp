@@ -246,7 +246,7 @@ describe('execution goes through the injected caller', () => {
     expect(result.content[0]?.text).toContain('RATE_LIMITED');
     // An agent told only "rate limited" retries immediately and burns the next
     // window too, so the wait has to be in the text it reads.
-    expect(result.content[0]?.text).toContain('Retry after 60 seconds');
+    expect(result.content[0]?.text).toContain('"retryAfterSeconds":60');
   });
 
   it('degrades an unrecognizable throw to UNKNOWN rather than losing it', () => {

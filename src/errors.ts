@@ -9,12 +9,17 @@
  * transport on a 429 would take out an agent's whole session over a wait.
  */
 
+import type { Denial } from './denial.js';
+import { withDefaultNext } from './denial.js';
+
 /** Anything carrying upAPI's public error shape, whatever threw it. */
 type ErrorLike = {
   code?: unknown;
   message?: unknown;
   status?: unknown;
   retryAfterSeconds?: unknown;
+  next?: unknown;
+  docs?: unknown;
 };
 
 export type ToolFailure = {
@@ -22,38 +27,49 @@ export type ToolFailure = {
   message: string;
   status: number | undefined;
   retryAfterSeconds: number | undefined;
+  next: Denial['next'] | undefined;
+  docs: string | undefined;
 };
 
 /**
  * Read a failure structurally rather than by class. `@upapi/sdk`'s `UpAPIError`
- * satisfies this, and so does the hosted route's in-process result — one
- * formatter serves both transports without @upapi/mcp taking a runtime
- * dependency on either one's error type.
+ * satisfies this, and so does the hosted route's in-process result and a
+ * `DenialError` (read through its `.denial`).
  */
 export function toToolFailure(err: unknown): ToolFailure {
-  const e = (err ?? {}) as ErrorLike;
-  const code = typeof e.code === 'string' && e.code.length > 0 ? e.code : 'UNKNOWN';
+  const e = (err ?? {}) as ErrorLike & { denial?: ErrorLike };
+  const src: ErrorLike = e.denial ?? e;
+  const code = typeof src.code === 'string' && src.code.length > 0 ? src.code : 'UNKNOWN';
   const message =
-    typeof e.message === 'string' && e.message.length > 0 ? e.message : 'The operation failed.';
+    typeof src.message === 'string' && src.message.length > 0
+      ? src.message
+      : 'The operation failed.';
+  const next =
+    src.next && typeof (src.next as { tool?: unknown }).tool === 'string'
+      ? (src.next as Denial['next'])
+      : undefined;
   return {
     code,
     message,
-    status: typeof e.status === 'number' ? e.status : undefined,
-    retryAfterSeconds: typeof e.retryAfterSeconds === 'number' ? e.retryAfterSeconds : undefined,
+    status: typeof src.status === 'number' ? src.status : undefined,
+    retryAfterSeconds:
+      typeof src.retryAfterSeconds === 'number' ? src.retryAfterSeconds : undefined,
+    next,
+    docs: typeof src.docs === 'string' ? src.docs : undefined,
   };
 }
 
-/**
- * The text an agent reads when a tool fails. The error CODE leads because it is
- * the stable thing to branch on (upAPI canonicalizes it across ops and worker
- * languages), and a rate limit spells out the wait in seconds — an agent that is
- * only told "rate limited" retries immediately and burns the next window too.
- */
+/** The text an agent reads when a tool fails: the denial envelope as JSON. */
 export function formatToolFailure(slug: string, failure: ToolFailure): string {
-  const parts = [`${failure.code}: ${failure.message}`];
-  if (failure.retryAfterSeconds !== undefined) {
-    parts.push(`Retry after ${failure.retryAfterSeconds} seconds.`);
-  }
-  parts.push(`(operation: ${slug})`);
-  return parts.join(' ');
+  const d = withDefaultNext({
+    code: failure.code,
+    message: failure.message,
+    ...(failure.next ? { next: failure.next } : {}),
+    ...(failure.docs ? { docs: failure.docs } : {}),
+    ...(failure.retryAfterSeconds !== undefined
+      ? { retryAfterSeconds: failure.retryAfterSeconds }
+      : {}),
+    operation: slug,
+  });
+  return JSON.stringify(d);
 }

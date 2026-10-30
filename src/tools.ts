@@ -1,5 +1,6 @@
 import { OPERATIONS, type OperationMeta, type OperationSlug } from '@upapi/sdk';
 import { formatToolFailure, toToolFailure } from './errors.js';
+import type { Tier } from './tiers.js';
 
 /**
  * The transport-neutral tool table.
@@ -493,6 +494,8 @@ export type UpapiToolSpec = {
    * optional: see `OPERATION_ANNOTATIONS`.
    */
   annotations: McpToolAnnotations;
+  /** Permission tier this tool needs. Catalog operations spend quota, so `write`. */
+  tier: Tier;
   /** Run the operation, resolving with its output or throwing the failure. */
   execute: (input: unknown) => Promise<unknown>;
   /** Run the operation and render the MCP result, failures included. */
@@ -521,8 +524,19 @@ export function describeTool(
   op: { slug: string; category: string; unitWeight: number },
 ): string {
   const cost = op.unitWeight === 1 ? '1 unit' : `${op.unitWeight} units`;
-  return `${summary}\n\nupAPI operation \`${op.slug}\` (${op.category}). Costs ${cost} of monthly quota per call.`;
+  const notice = PUBLIC_WRITE_NOTICE[op.slug];
+  return `${summary}\n\nupAPI operation \`${op.slug}\` (${op.category}). Costs ${cost} of monthly quota per call.${notice ? `\n\n${notice}` : ''}`;
 }
+
+/**
+ * Operations that publish to a third party as the user. The agent must show the user the exact
+ * text first: the user's answer in chat is the decision, the agent is only the hand that sends it.
+ * A future public-write operation adds one line here.
+ */
+const PUBLIC_WRITE_NOTICE: Readonly<Record<string, string>> = {
+  'reddit-oauth-post-comment.post':
+    "Posts publicly as the user's Reddit account. Ask the user to approve the exact text before calling.",
+};
 
 /**
  * The operation's declared annotations.
@@ -592,6 +606,7 @@ export function createUpapiToolSpecs(options: CreateToolsOptions): UpapiToolSpec
       inputSchema: op.inputSchema,
       outputSchema: op.outputSchema,
       annotations: annotationsFor(op),
+      tier: 'write',
       execute,
       call,
     };
