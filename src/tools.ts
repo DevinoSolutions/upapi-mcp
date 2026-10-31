@@ -364,6 +364,7 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
   'ip-geolocation.get': THIRD_PARTY_READ,
   'linkedin-check-account-health.post': THIRD_PARTY_READ,
   'linkedin-get-profile.post': THIRD_PARTY_READ,
+  'linkedin-get-sent-invitations.post': THIRD_PARTY_READ,
   'linkedin-jobs-detail.get': THIRD_PARTY_READ,
   'linkedin-jobs-search.get': THIRD_PARTY_READ,
   'linkedin-profile-search.post': THIRD_PARTY_READ,
