@@ -9,7 +9,7 @@ import {
   SEARCH_OPS_TOOL_NAME,
 } from './facade.js';
 import { parseToolMode, selectListedTools, type McpToolMode } from './table.js';
-import { SERVER_NAME, SERVER_VERSION } from './meta.js';
+import { SERVER_ICONS, SERVER_NAME, SERVER_VERSION } from './meta.js';
 import { createAccountToolEntries, type AccountCaller } from './account-tools.js';
 
 /**
@@ -89,7 +89,11 @@ export function createUpapiStdioServer(options: CreateStdioServerOptions): Serve
   });
 
   const server = new Server(
-    { name: options.name ?? SERVER_NAME, version: options.version ?? SERVER_VERSION },
+    {
+      name: options.name ?? SERVER_NAME,
+      version: options.version ?? SERVER_VERSION,
+      icons: SERVER_ICONS,
+    },
     { capabilities: { tools: {} } },
   );
 

@@ -19,3 +19,12 @@ export const SERVER_NAME = 'upAPI';
  * this stayed at `0.1.0` through three releases before anyone noticed.
  */
 export const SERVER_VERSION = '0.2.0';
+
+/**
+ * The icon an MCP client shows beside this server in `initialize`
+ * (serverInfo.icons, MCP 2025-11-25): the app icon tile (T-11031), the same
+ * hosted 512 PNG `server.json` lists first for the registry.
+ */
+export const SERVER_ICONS = [
+  { src: 'https://upapi.io/icons/icon-512.png', mimeType: 'image/png', sizes: ['512x512'] },
+];

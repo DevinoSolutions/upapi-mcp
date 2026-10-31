@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { SERVER_VERSION } from '../meta.js';
+import { SERVER_ICONS, SERVER_VERSION } from '../meta.js';
 
 /**
  * `server.json` is what the MCP Registry stores, and the registry validates it
@@ -61,6 +61,11 @@ describe('registry ownership + listing fields', () => {
   it('keeps description and title inside the schema’s 100-character cap', () => {
     expect(String(server['description']).length).toBeLessThanOrEqual(100);
     expect(String(server['title']).length).toBeLessThanOrEqual(100);
+  });
+
+  it('the icon an MCP client sees in initialize is the first icon server.json lists', () => {
+    const icons = server['icons'] as Array<Record<string, unknown>>;
+    expect(SERVER_ICONS).toEqual([icons[0]]);
   });
 
   it('declares icons, each an https URL with an allowed mime type', () => {
