@@ -278,6 +278,9 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
   'pdf-extract-text.post': THIRD_PARTY_READ,
   'screenshot.post': THIRD_PARTY_READ,
   'bbc-news.get': THIRD_PARTY_READ,
+  // Search engine reads (D40, public since #673): each call is one SERP fetch over
+  // the worker's own egress and changes nothing anywhere.
+  'bing-serp.get': THIRD_PARTY_READ,
   'bluesky-profile.get': THIRD_PARTY_READ,
   // The three Chatous reads answer questions about the CALLER'S OWN account, from
   // that account's `connect.sid` cookie: is the session still accepted, what does
@@ -314,6 +317,7 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
   'crypto-price.get': THIRD_PARTY_READ,
   'currency-convert.get': THIRD_PARTY_READ,
   'detect-tech-stack.post': THIRD_PARTY_READ,
+  'duckduckgo-search.get': THIRD_PARTY_READ,
   'devto-articles-search.get': THIRD_PARTY_READ,
   // The eight `github-*` reads added by the G2 port are plain GETs against
   // api.github.com on the worker's own egress: they read issues, repos, users,
@@ -342,6 +346,8 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
   'google-maps-place.get': THIRD_PARTY_READ,
   'google-maps-reviews.get': THIRD_PARTY_READ,
   'google-maps-search.post': THIRD_PARTY_READ,
+  'google-search.post': THIRD_PARTY_READ,
+  'google-serp.get': THIRD_PARTY_READ,
   'hackernews-search.get': THIRD_PARTY_READ,
   'instagram-check-account-health.get': THIRD_PARTY_READ,
   'instagram-discover-location.post': THIRD_PARTY_READ,
