@@ -344,6 +344,7 @@ export const ACCOUNT_TOOL_DEFS: readonly AccountToolDef[] = [
     'List API keys',
     'Keys with name, prefix, scopes, last used.',
     obj(),
+    ['route:GET /api/keys'],
   ),
   def(
     'create_api_key',
@@ -351,7 +352,7 @@ export const ACCOUNT_TOOL_DEFS: readonly AccountToolDef[] = [
     'Create API key',
     'Ask the user which permissions the key needs; never choose for them. Creates a key and returns the secret once. Omit tiers for all.',
     obj({ name: s('Key name'), tiers: { type: 'array', items: s('Tier') } }, ['name']),
-    ['action:createKeyAction', 'action:createOnboardingKey'],
+    ['action:createKeyAction', 'action:createOnboardingKey', 'route:POST /api/keys'],
   ),
   def(
     'rotate_api_key',
@@ -366,7 +367,7 @@ export const ACCOUNT_TOOL_DEFS: readonly AccountToolDef[] = [
     'Revoke API key',
     'Deletes a key immediately. Needs a confirmToken.',
     obj({ keyId: s('Key id'), ...CONFIRM }, ['keyId']),
-    ['action:deleteKeyAction'],
+    ['action:deleteKeyAction', 'route:DELETE /api/keys/[id]'],
   ),
   def(
     'list_granted_scopes',
