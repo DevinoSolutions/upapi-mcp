@@ -37,6 +37,12 @@ const WRITER_SLUGS: readonly string[] = [
   'instagram-check-account.post',
   // Publishes a Reddit comment under a person's name — see PUBLIC_POST_WRITE.
   'reddit-oauth-post-comment.post',
+  // Contra writes under the caller's own session (2026-10-29): an application, a
+  // message, and a follow edge in each direction.
+  'contra-apply-to-job.post',
+  'contra-send-message.post',
+  'contra-follow-user.post',
+  'contra-unfollow-user.post',
   // Opening a Wellfound recruiter thread. It is the only writer here whose side
   // effect is unmeasured rather than known: a conversation carries a
   // server-side `unread` flag, this is the query the UI fires when a human

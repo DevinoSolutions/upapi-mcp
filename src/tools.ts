@@ -58,9 +58,9 @@ export type McpToolAnnotations = {
 };
 
 /**
- * The six behavioural classes the published operations (nearly 100) fall into.
+ * The eight behavioural classes the published operations (100+) fall into.
  *
- * `openWorldHint` is `true` in five of the six, and that is not a shortcut: upAPI is
+ * `openWorldHint` is `true` in seven of the eight, and that is not a shortcut: upAPI is
  * an API marketplace, so EVERY published operation exists to reach a system
  * upAPI does not own — GitHub, Reddit, an IMAP host, the Wayback Machine.
  * One class carries `openWorldHint: false`: LOCAL_COMPUTE, for an operation that
@@ -232,6 +232,22 @@ const PUBLIC_POST_WRITE: McpToolAnnotations = {
 };
 
 /**
+ * `contra-follow-user.post` and `contra-unfollow-user.post` — set a follow edge on the
+ * Contra account the caller's own session speaks as.
+ *
+ * Not read-only: the edge IS the operation, and the followed person is notified.
+ * `idempotentHint: true` because following (or unfollowing) a profile you already
+ * follow (or do not follow) leaves the same state, unlike a comment or a message.
+ * `destructiveHint: false`: the only thing removed is an edge the caller made.
+ */
+const SOCIAL_EDGE_WRITE: McpToolAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: true,
+};
+
+/**
  * `text-analyze.post` — the Rust worker's pure-compute endpoint: counts and a SHA-256
  * over a caller-supplied string — and `email-generate-address.post`.
  *
@@ -260,7 +276,7 @@ const LOCAL_COMPUTE: McpToolAnnotations = {
  * `packages/mcp/src/__tests__/tools.test.ts` pins the same invariant at runtime.
  */
 export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnotations>> = {
-  // ── Third-party reads (90) ────────────────────────────────────────────────
+  // ── Third-party reads (99) ────────────────────────────────────────────────
   'archive-wayback.get': THIRD_PARTY_READ,
   // Renders/reads a caller-named page or document and writes nothing anywhere.
   // The three render ops (screenshot, html-to-pdf, fetch-markdown) hold a real
@@ -314,6 +330,12 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
   'contra-company-profile.get': THIRD_PARTY_READ,
   'contra-discover-people.get': THIRD_PARTY_READ,
   'contra-job-detail.get': THIRD_PARTY_READ,
+  // The five session-gated Contra reads (2026-10-29) carry the caller's own cookies but
+  // only read: each is one GraphQL query, no mutation, nothing marked read or changed.
+  'contra-check-session.get': THIRD_PARTY_READ,
+  'contra-job-feed.get': THIRD_PARTY_READ,
+  'contra-list-conversations.get': THIRD_PARTY_READ,
+  'contra-list-messages.get': THIRD_PARTY_READ,
   'crypto-price.get': THIRD_PARTY_READ,
   'currency-convert.get': THIRD_PARTY_READ,
   'detect-tech-stack.post': THIRD_PARTY_READ,
@@ -458,6 +480,14 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
 
   // ── Publishes content under the caller's own account (1) ──────────────────
   'reddit-oauth-post-comment.post': PUBLIC_POST_WRITE,
+
+  // ── Contra writes under the caller's own session (4, 2026-10-29) ──────────
+  // An application and a message are visible to a real person and a retry files a
+  // second one, so they take the non-idempotent class; follow/unfollow set an edge.
+  'contra-apply-to-job.post': PUBLIC_POST_WRITE,
+  'contra-send-message.post': PUBLIC_POST_WRITE,
+  'contra-follow-user.post': SOCIAL_EDGE_WRITE,
+  'contra-unfollow-user.post': SOCIAL_EDGE_WRITE,
 
   // ── Local pure compute, no network (2) ────────────────────────────────────
   'text-analyze.post': LOCAL_COMPUTE,
