@@ -215,7 +215,7 @@ export const ACCOUNT_TOOL_DEFS: readonly AccountToolDef[] = [
     'delete_account',
     'account',
     'Delete account',
-    'Ask the user to confirm the workspace name before calling; never decide for them. Permanently closes the account and deletes the workspace, its keys, APIs, functions and data (support can restore from backups on request). Needs a confirmToken; owner only.',
+    'Ask the user to confirm the workspace name before calling; never decide for them. Permanently closes the account and deletes the workspace, its keys, APIs, functions and data (support can restore from backups on request). Cancels the paid plan first; a plan bought through Apple, Google or Amazon only the user can cancel, so when the answer has storeNotice, show it to them word for word. Needs a confirmToken; owner only.',
     obj({ workspaceName: s('Exact workspace name, as a typo guard'), ...CONFIRM }, [
       'workspaceName',
     ]),
