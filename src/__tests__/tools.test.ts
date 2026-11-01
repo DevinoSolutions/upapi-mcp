@@ -32,6 +32,8 @@ function readSeedRows(): SeedRow[] {
 const WRITER_SLUGS: readonly string[] = [
   'audio-transcribe.post',
   'email-read-verification-code-graph.post',
+  // The LINK twin of the Graph code reader: same MAILBOX_READ annotation (refresh-token rotation side effect).
+  'email-read-verification-link-graph.post',
   'email-read-verification-code.post',
   'email-read-verification-link.post',
   'instagram-check-account.post',
