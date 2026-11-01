@@ -450,7 +450,7 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
   'wellfound-viewer.post': THIRD_PARTY_READ,
   'wikipedia-article.get': THIRD_PARTY_READ,
 
-  // ── Mailbox reads, live-credential/mailbox side effects (3) ───────────────
+  // ── Mailbox reads, live-credential/mailbox side effects (4) ───────────────
   'email-read-verification-code.post': MAILBOX_READ,
   'email-read-verification-link.post': MAILBOX_READ,
   // `email-read-verification-code-graph.post` — the Microsoft Graph twin, for
@@ -468,6 +468,14 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
   // why `destructiveHint` stays false and `idempotentHint` stays true: a repeat
   // call can fail on a since-rotated token, but it never compounds an effect.
   'email-read-verification-code-graph.post': MAILBOX_READ,
+  // `email-read-verification-link-graph.post` — the LINK twin of the Graph code
+  // reader, for the same IMAP-off outlook.com mailboxes. It returns a one-time URL
+  // out of an `<a href>` and may follow a click-tracker redirect (e.g.
+  // click.discord.com -> discord.com/verify) through the account's proxy to resolve
+  // it; that extra hop is still an out-of-domain read, already covered by
+  // openWorldHint. The same rotating-refresh-token side effect applies, so it earns
+  // MAILBOX_READ identically — nothing is destroyed and a repeat call never compounds.
+  'email-read-verification-link-graph.post': MAILBOX_READ,
 
   // ── Account-recovery probe (1) ────────────────────────────────────────────
   'instagram-check-account.post': ACCOUNT_RECOVERY_PROBE,
