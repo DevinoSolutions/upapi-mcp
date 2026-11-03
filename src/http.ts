@@ -15,6 +15,7 @@ import { parseToolMode, selectListedTools, type McpToolMode } from './table.js';
 import { createAccountToolEntries, type AccountCaller } from './account-tools.js';
 import type { Tier } from './tiers.js';
 import { SERVER_ICONS, SERVER_NAME, SERVER_VERSION } from './meta.js';
+import { refuseUnsupportedProtocolVersion } from './protocol-version.js';
 
 /**
  * MCP over streamable HTTP, for a web-standard `Request` → `Response` handler
@@ -75,6 +76,15 @@ export type McpHttpOptions = CreateToolsOptions & {
    * swallowed. `name` is caller-chosen; cap it before logging it.
    */
   onUnknownTool?: ((name: string, mode: McpToolMode) => void) | undefined;
+  /**
+   * Called when a request is refused for asking for a protocol version this
+   * server does not speak (the -32022 answer, see `./protocol-version.ts`), just
+   * before that answer goes back — so the refusal leaves a trace. Observability
+   * only, like `onUnknownTool`: anything it throws is swallowed. Both values are
+   * caller-chosen; cap them before logging them. `method` is null for a batch or a
+   * bodiless request.
+   */
+  onUnsupportedProtocolVersion?: ((requested: string, method: string | null) => void) | undefined;
 };
 
 /**
@@ -182,6 +192,19 @@ function reportUnknownTool(
   }
 }
 
+/** Runs the host's `onUnsupportedProtocolVersion` hook; a failing hook never changes the answer. */
+function reportUnsupportedProtocolVersion(
+  hook: McpHttpOptions['onUnsupportedProtocolVersion'],
+  requested: string,
+  method: string | null,
+): void {
+  try {
+    hook?.(requested, method);
+  } catch {
+    // Observability must not be able to fail a call.
+  }
+}
+
 /**
  * Serve one MCP request. Build the `caller` from the AUTHENTICATED identity of
  * this request and pass it in — that is the whole mechanism by which the hosted
@@ -191,6 +214,20 @@ export async function handleUpapiMcpRequest(
   request: Request,
   options: McpHttpOptions,
 ): Promise<Response> {
+  // A protocol version the SDK does not speak (claude.ai opens at 2026-07-28) gets
+  // the spec's -32022 listing ours, so the client retries instead of giving up
+  // (T-13340). The host authenticates before calling this, so an anonymous request
+  // has already had its 401 challenge and never reaches the check.
+  const refusal = await refuseUnsupportedProtocolVersion(request);
+  if (refusal) {
+    reportUnsupportedProtocolVersion(
+      options.onUnsupportedProtocolVersion,
+      refusal.requested,
+      refusal.method,
+    );
+    return refusal.response;
+  }
+
   // Every public operation is served, exactly as on the stdio server (owner
   // decision, 2026-09-26: the hosted MCP withholds no category and no slug). A
   // host's own `filter` may still narrow it. How much of it a MODE advertises is
