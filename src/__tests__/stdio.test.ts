@@ -62,6 +62,22 @@ describe('createUpapiStdioServer with no explicit mode', () => {
   });
 });
 
+describe('the stdio server identifies itself on the wire', () => {
+  // Pinned as a literal on purpose (PR #714, owner ruling 2026-11-01): the product's proper
+  // name, not the lowercase slug. A tautological check against SERVER_NAME would not catch
+  // someone retyping the constant.
+  it('reports serverInfo name and title as "upAPI"', async () => {
+    const { client, close } = await connect('compact');
+    try {
+      const info = client.getServerVersion();
+      expect(info?.name).toBe('upAPI');
+      expect(info?.title).toBe('upAPI');
+    } finally {
+      await close();
+    }
+  });
+});
+
 describe('the stdio server puts annotations on the wire', () => {
   it('states all four hints on every tool it advertises', async () => {
     const { client, close } = await connect('full');
