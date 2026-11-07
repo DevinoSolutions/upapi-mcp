@@ -91,7 +91,9 @@ export type McpToolAnnotations = {
  * submission). The other POST-ing workers there — account creation, login,
  * messaging, and any comment poster other than `reddit-oauth-post-comment.post`
  * and `github-issue-comment.post` (both ARE published, see PUBLIC_POST_WRITE) —
- * are absent from the catalog, so no tool exists for them on any transport.
+ * are absent from the catalog, so no tool exists for them on any transport. (Wellfound's
+ * login, apply and send-message and Contra's writes are no longer in that set: they went
+ * public under D40 and are classified in their own sections below.)
  *
  * SINCE 2026-09-07 THE HTTP VERB ALONE NO LONGER SEPARATES THOSE TWO SETS. The
  * Wellfound operations speak persisted GraphQL, so every one of them — reads
@@ -100,8 +102,8 @@ export type McpToolAnnotations = {
  * `CandidateSendMessage` writes) rather than in the method. A future grep for
  * `session.post` will therefore hit a dozen pure readers; read what the body
  * asks for before reclassifying any of them. Wellfound's three genuine writes
- * (login, apply, send-message) are `publishTargets=[]` and so are absent from
- * the catalog and from this table.
+ * (login, apply, send-message) went public under D40 on 2026-11-07 and are
+ * classified under "Wellfound writes" below, not here.
  */
 const THIRD_PARTY_READ: McpToolAnnotations = {
   readOnlyHint: true,
@@ -500,6 +502,19 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
   'contra-follow-user.post': SOCIAL_EDGE_WRITE,
   'contra-unfollow-user.post': SOCIAL_EDGE_WRITE,
 
+  // ── Wellfound writes under the caller's own account (3, public since D40) ─
+  // Login hands the caller's own email and password to wellfound.com and returns a session
+  // blob; every call mints a new session, so it is not idempotent. Apply sends one
+  // application and send-message sends one message from that session: both are visible to a
+  // real person, neither can be withdrawn or unsent, and a retry files a second one, so all
+  // three take the non-idempotent class (additive, nothing is deleted or overwritten).
+  // Apply and send-message carry the approve-the-text notice (PUBLIC_WRITE_NOTICE) because
+  // each puts the caller's own words in front of a hiring team or a recruiter. Login has no
+  // approve-the-text notice (it sends no text to another person), only a hint to reuse a session.
+  'wellfound-login.post': PUBLIC_POST_WRITE,
+  'wellfound-apply.post': PUBLIC_POST_WRITE,
+  'wellfound-send-message.post': PUBLIC_POST_WRITE,
+
   // ── GitHub writes under the caller's own token (4, public since D40) ──────
   // Each sends the caller's own GitHub token to api.github.com for one REST call. A comment
   // is new text a person can read and a retry files a second one, so it takes the
@@ -599,6 +614,12 @@ const PUBLIC_WRITE_NOTICE: Readonly<Record<string, string>> = {
     "Posts publicly as the user's Reddit account. Ask the user to approve the exact text before calling.",
   'github-issue-comment.post':
     "Posts publicly as the user's GitHub account. Ask the user to approve the exact text before calling.",
+  'wellfound-login.post':
+    "Takes the user's own Wellfound password and logs in with it. Prefer a session the user already holds, and reuse it instead of logging in again.",
+  'wellfound-apply.post':
+    "Sends an application as the user's Wellfound account and it cannot be withdrawn. Ask the user to approve the exact cover note and answers before calling.",
+  'wellfound-send-message.post':
+    "Sends a message as the user's Wellfound account and it cannot be unsent. Ask the user to approve the exact text before calling.",
 };
 
 /**

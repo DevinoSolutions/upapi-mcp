@@ -50,6 +50,10 @@ const WRITER_SLUGS: readonly string[] = [
   'github-comment-reaction.post',
   'github-repo-star.post',
   'github-user-follow.post',
+  // Wellfound writes under the caller's own account (D40): a login, an application, a message.
+  'wellfound-login.post',
+  'wellfound-apply.post',
+  'wellfound-send-message.post',
   // Opening a Wellfound recruiter thread. It is the only writer here whose side
   // effect is unmeasured rather than known: a conversation carries a
   // server-side `unread` flag, this is the query the UI fires when a human
