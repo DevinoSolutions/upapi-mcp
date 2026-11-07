@@ -134,14 +134,16 @@ const SEARCH_ANNOTATIONS: McpToolAnnotations = {
  * operation chosen), and open-world (every upAPI operation exists to reach a
  * system upAPI does not own).
  *
- * `destructiveHint: false` is the one claim about contents, and it is the one
- * the tests actually hold: `facade.test.ts` asserts every operation reachable
- * through this surface is non-destructive, so the day that stops being true the
- * suite fails here rather than a host discovering it at runtime.
+ * `destructiveHint: true` for the same reason: the dispatcher can reach
+ * destructive operations (chatous-update-profile, chatous-upload-profile-photo
+ * and chatous-end-chat each replace or end something on the caller's own
+ * account). It matches `execute_typescript` in code-mode.ts. `facade.test.ts`
+ * pins exactly which operations are destructive, so a change in that set shows
+ * up in review rather than at a host's runtime.
  */
 const CALL_ANNOTATIONS: McpToolAnnotations = {
   readOnlyHint: false,
-  destructiveHint: false,
+  destructiveHint: true,
   idempotentHint: false,
   openWorldHint: true,
 };

@@ -58,9 +58,9 @@ export type McpToolAnnotations = {
 };
 
 /**
- * The eight behavioural classes the published operations (100+) fall into.
+ * The nine behavioural classes the published operations (100+) fall into.
  *
- * `openWorldHint` is `true` in seven of the eight, and that is not a shortcut: upAPI is
+ * `openWorldHint` is `true` in eight of the nine, and that is not a shortcut: upAPI is
  * an API marketplace, so EVERY published operation exists to reach a system
  * upAPI does not own — GitHub, Reddit, an IMAP host, the Wayback Machine.
  * One class carries `openWorldHint: false`: LOCAL_COMPUTE, for an operation that
@@ -235,7 +235,8 @@ const PUBLIC_POST_WRITE: McpToolAnnotations = {
 
 /**
  * `contra-follow-user.post` and `contra-unfollow-user.post` — set a follow edge on the
- * Contra account the caller's own session speaks as; `github-repo-star.post`,
+ * Contra account the caller's own session speaks as; `chatous-dequeue.post` — leaves the
+ * Chatous matchmaking queue, and a repeat call finds the entry already gone; `github-repo-star.post`,
  * `github-user-follow.post` and `github-comment-reaction.post` — set a star, a follow or a
  * reaction as the GitHub account the caller's own token speaks as.
  *
@@ -247,6 +248,25 @@ const PUBLIC_POST_WRITE: McpToolAnnotations = {
 const SOCIAL_EDGE_WRITE: McpToolAnnotations = {
   readOnlyHint: false,
   destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: true,
+};
+
+/**
+ * `chatous-update-profile.post`, `chatous-upload-profile-photo.post` and
+ * `chatous-end-chat.post` — replace or end state on the Chatous account the caller's own
+ * session speaks as.
+ *
+ * Not read-only, and the one class here with `destructiveHint: true`, because each one
+ * discards something the caller cannot get back from upAPI. The profile write is a FULL
+ * REPLACE upstream, so a field left out of the call is cleared, not kept; a photo upload
+ * replaces the current photo; ending a chat closes a live conversation with another person
+ * for good, and `block` also blocks them. `idempotentHint: true` because repeating the same
+ * call leaves the same state: the same values, the same photo, a chat that is already over.
+ */
+const ACCOUNT_STATE_OVERWRITE: McpToolAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: true,
   idempotentHint: true,
   openWorldHint: true,
 };
@@ -306,8 +326,8 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
   // that account's `connect.sid` cookie: is the session still accepted, what does
   // the account's own profile and conversation list look like, and what has
   // arrived since. They write nothing — no message, no profile edit, no queue
-  // entry — and the eight Chatous operations that DO write are absent from the
-  // catalog, so no tool exists for them on any transport.
+  // entry — and the seven Chatous operations that DO write are classified in their
+  // own section further down (public since D40), not here.
   //
   // Two of them reach Chatous over a SockJS WEBSOCKET rather than an HTTP
   // request, which the class comment above does not cover: its `readOnlyHint`
@@ -528,6 +548,22 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
   'github-repo-star.post': SOCIAL_EDGE_WRITE,
   'github-user-follow.post': SOCIAL_EDGE_WRITE,
 
+  // ── Chatous writes under the caller's own session (7, public since D40) ──
+  // Each sends the caller's own connect.sid (or, for login, email and password) to
+  // chatous.com for one call. Login mints a new session every time, a message is delivered
+  // to a real person and a retry sends it twice, and joining the queue can connect the
+  // account to a real person at once, so those three take the non-idempotent class.
+  // Leaving the queue sets an edge that is already set after the first call. Profile, photo
+  // and end-chat overwrite or end state, so they take ACCOUNT_STATE_OVERWRITE. Every one of
+  // them except the queue exit carries a notice (PUBLIC_WRITE_NOTICE).
+  'chatous-login.post': PUBLIC_POST_WRITE,
+  'chatous-send-message.post': PUBLIC_POST_WRITE,
+  'chatous-enqueue.post': PUBLIC_POST_WRITE,
+  'chatous-dequeue.post': SOCIAL_EDGE_WRITE,
+  'chatous-update-profile.post': ACCOUNT_STATE_OVERWRITE,
+  'chatous-upload-profile-photo.post': ACCOUNT_STATE_OVERWRITE,
+  'chatous-end-chat.post': ACCOUNT_STATE_OVERWRITE,
+
   // ── Local pure compute, no network (2) ────────────────────────────────────
   'text-analyze.post': LOCAL_COMPUTE,
   // `email-generate-address.post` builds a persona string in-process (a random
@@ -620,6 +656,18 @@ const PUBLIC_WRITE_NOTICE: Readonly<Record<string, string>> = {
     "Sends an application as the user's Wellfound account and it cannot be withdrawn. Ask the user to approve the exact cover note and answers before calling.",
   'wellfound-send-message.post':
     "Sends a message as the user's Wellfound account and it cannot be unsent. Ask the user to approve the exact text before calling.",
+  'chatous-login.post':
+    "Takes the user's own Chatous password and logs in with it. Prefer a connect.sid the user already holds, and reuse it instead of logging in again.",
+  'chatous-send-message.post':
+    "Sends a message to a real person as the user's Chatous account and it cannot be unsent. Ask the user to approve the exact text before calling.",
+  'chatous-enqueue.post':
+    "Puts the user's Chatous account in the matchmaking queue, where it can be connected to a real person at once. Ask the user before calling.",
+  'chatous-update-profile.post':
+    "Replaces the user's whole Chatous profile, and any field left out is cleared. Send every field the user wants kept, and ask the user to approve the values first.",
+  'chatous-upload-profile-photo.post':
+    "Replaces the user's Chatous profile photo. Ask the user to approve the image before calling.",
+  'chatous-end-chat.post':
+    "Ends the user's current Chatous chat and, when block is set, blocks that person. Neither can be undone. Ask the user before calling.",
 };
 
 /**

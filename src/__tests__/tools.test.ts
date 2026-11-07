@@ -54,12 +54,31 @@ const WRITER_SLUGS: readonly string[] = [
   'wellfound-login.post',
   'wellfound-apply.post',
   'wellfound-send-message.post',
+  // Chatous writes under the caller's own session (D40): a login, a message, joining and
+  // leaving the matchmaking queue, a profile replace, a photo replace, ending a chat.
+  'chatous-login.post',
+  'chatous-send-message.post',
+  'chatous-enqueue.post',
+  'chatous-dequeue.post',
+  'chatous-update-profile.post',
+  'chatous-upload-profile-photo.post',
+  'chatous-end-chat.post',
   // Opening a Wellfound recruiter thread. It is the only writer here whose side
   // effect is unmeasured rather than known: a conversation carries a
   // server-side `unread` flag, this is the query the UI fires when a human
   // opens a thread, and settling whether that clears it needs a live account
   // nobody logged into for the port. See INBOX_THREAD_OPEN in tools.ts.
   'wellfound-conversation-detail.post',
+];
+
+/**
+ * The only operations marked `destructiveHint: true`: each replaces or ends something on the
+ * caller's own Chatous account that upAPI cannot restore (see ACCOUNT_STATE_OVERWRITE in tools.ts).
+ */
+const DESTRUCTIVE_SLUGS: readonly string[] = [
+  'chatous-update-profile.post',
+  'chatous-upload-profile-photo.post',
+  'chatous-end-chat.post',
 ];
 
 /**
@@ -211,14 +230,34 @@ describe('every tool declares how it behaves', () => {
     expect(writers).toEqual([...WRITER_SLUGS].sort());
   });
 
-  it('never claims a read-only tool is destructive, and marks nothing destructive', () => {
-    // No published operation deletes or overwrites anything: the writers above
-    // open a mailbox read-write and probe a recovery endpoint respectively.
+  it('never claims a read-only tool is destructive, and names every destructive one', () => {
+    // Almost no published operation deletes or overwrites anything: most writers above open a
+    // mailbox read-write, probe a recovery endpoint or add something new. The exceptions are
+    // named exhaustively, like the writers, so a new tool cannot inherit `destructiveHint:
+    // true` (or quietly lose it) because it looked like its neighbours.
+    const destructive = createUpapiToolSpecs({ caller: noopCaller })
+      .filter((spec) => spec.annotations.destructiveHint)
+      .map((spec) => spec.slug)
+      .sort();
+    expect(destructive).toEqual([...DESTRUCTIVE_SLUGS].sort());
     for (const spec of createUpapiToolSpecs({ caller: noopCaller })) {
-      expect(spec.annotations.destructiveHint, spec.slug).toBe(false);
       if (spec.annotations.readOnlyHint) {
+        expect(spec.annotations.destructiveHint, spec.slug).toBe(false);
         expect(spec.annotations.idempotentHint, spec.slug).toBe(true);
       }
+    }
+  });
+
+  it('does not call a login, a message or a queue join idempotent', () => {
+    // A login mints a new session per call, a retried message reaches the other person twice,
+    // and a queue join can connect the account to a real person at once.
+    for (const slug of [
+      'chatous-login.post',
+      'chatous-send-message.post',
+      'chatous-enqueue.post',
+    ]) {
+      const spec = createUpapiToolSpecs({ caller: noopCaller }).find((s) => s.slug === slug);
+      expect(spec?.annotations.idempotentHint, slug).toBe(false);
     }
   });
 
@@ -320,8 +359,14 @@ describe('streamable HTTP transport', () => {
       OPERATIONS.filter((op) => WRITER_SLUGS.includes(op.slug)).map((op) => op.operationId),
     );
     expect(writerNames.size).toBe(WRITER_SLUGS.length);
+    const destructiveNames = new Set(
+      OPERATIONS.filter((op) => DESTRUCTIVE_SLUGS.includes(op.slug)).map((op) => op.operationId),
+    );
+    expect(destructiveNames.size).toBe(DESTRUCTIVE_SLUGS.length);
     for (const tool of tools) {
-      expect(tool.annotations?.['destructiveHint'], tool.name).toBe(false);
+      expect(tool.annotations?.['destructiveHint'], tool.name).toBe(
+        destructiveNames.has(tool.name),
+      );
       expect(tool.annotations?.['readOnlyHint'], tool.name).toBe(!writerNames.has(tool.name));
       if (!writerNames.has(tool.name)) {
         expect(tool.annotations?.['idempotentHint'], tool.name).toBe(true);

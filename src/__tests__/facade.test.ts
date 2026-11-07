@@ -312,18 +312,26 @@ describe('annotations state what the meta-tools do', () => {
     const call = tools.find((t) => t.name === CALL_OP_TOOL_NAME);
     expect(call?.annotations).toEqual({
       readOnlyHint: false,
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: true,
     });
   });
 
-  it('holds the one claim call_op makes about contents: nothing reachable is destructive', () => {
-    // `destructiveHint: false` on the dispatcher is only honest while this is
-    // true of every operation it can reach.
-    for (const spec of createUpapiToolSpecs({ caller: noopCaller })) {
-      expect(spec.annotations.destructiveHint, spec.slug).toBe(false);
-    }
+  it('holds the claim call_op makes about contents: exactly these operations are destructive', () => {
+    // `destructiveHint: true` on the dispatcher is honest because it can reach
+    // these three (each replaces or ends something on the caller's own Chatous
+    // account). If the set changes, this fails and the dispatcher's comment in
+    // facade.ts has to be revisited with it.
+    const destructive = createUpapiToolSpecs({ caller: noopCaller })
+      .filter((spec) => spec.annotations.destructiveHint)
+      .map((spec) => spec.slug)
+      .sort();
+    expect(destructive).toEqual([
+      'chatous-end-chat.post',
+      'chatous-update-profile.post',
+      'chatous-upload-profile-photo.post',
+    ]);
   });
 });
 
