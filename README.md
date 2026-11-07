@@ -39,7 +39,7 @@ It will walk you through signing in to upAPI in a browser; there is no key to co
 Code:
 
 ```bash
-claude mcp add --transport http upapi https://app.upapi.io/api/mcp
+claude mcp add --transport http upAPI https://app.upapi.io/api/mcp
 ```
 
 ## Local — API key
@@ -47,7 +47,7 @@ claude mcp add --transport http upapi https://app.upapi.io/api/mcp
 Create a key by asking your agent to run `create_api_key` over the hosted connection, or on the [API keys page](https://app.upapi.io/dashboard/api-keys), then:
 
 ```bash
-claude mcp add upapi -e UPAPI_API_KEY=upapi_xxx -- npx -y @upapi/mcp
+claude mcp add upAPI -e UPAPI_API_KEY=upapi_xxx -- npx -y @upapi/mcp
 ```
 
 Claude Desktop (`claude_desktop_config.json`), Cursor, and Windsurf take the same thing as JSON:
@@ -55,7 +55,7 @@ Claude Desktop (`claude_desktop_config.json`), Cursor, and Windsurf take the sam
 ```json
 {
   "mcpServers": {
-    "upapi": {
+    "upAPI": {
       "command": "npx",
       "args": ["-y", "@upapi/mcp"],
       "env": { "UPAPI_API_KEY": "upapi_xxx" }
@@ -94,7 +94,7 @@ round-trip.
 There are two other tables. `?tools=full` gives every operation its own tool:
 
 ```bash
-claude mcp add --transport http upapi 'https://app.upapi.io/api/mcp?tools=full'
+claude mcp add --transport http upAPI 'https://app.upapi.io/api/mcp?tools=full'
 ```
 
 `?tools=directory` gives a curated set of 11 **named** tools for the flagship operations —

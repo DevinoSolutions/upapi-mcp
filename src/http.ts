@@ -256,6 +256,7 @@ export async function handleUpapiMcpRequest(
   const server = new Server(
     {
       name: options.name ?? SERVER_NAME,
+      title: options.name ?? SERVER_NAME,
       version: options.version ?? SERVER_VERSION,
       icons: SERVER_ICONS,
     },

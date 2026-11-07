@@ -32,9 +32,9 @@ async function main(): Promise<void> {
   if (!apiKey) {
     process.stderr.write(
       'upapi-mcp: UPAPI_API_KEY is not set.\n' +
-        '  Connect the hosted server (claude mcp add --transport http upapi https://app.upapi.io/api/mcp),\n' +
+        '  Connect the hosted server (claude mcp add --transport http upAPI https://app.upapi.io/api/mcp),\n' +
         '  ask your agent to run create_api_key, then pass the key to this server, e.g.\n' +
-        '    claude mcp add upapi -e UPAPI_API_KEY=upapi_... -- npx -y @upapi/mcp\n',
+        '    claude mcp add upAPI -e UPAPI_API_KEY=upapi_... -- npx -y @upapi/mcp\n',
     );
     process.exit(1);
   }
