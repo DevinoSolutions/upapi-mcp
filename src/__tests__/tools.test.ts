@@ -45,6 +45,11 @@ const WRITER_SLUGS: readonly string[] = [
   'contra-send-message.post',
   'contra-follow-user.post',
   'contra-unfollow-user.post',
+  // GitHub writes under the caller's own token (D40): a comment, a reaction, a star, a follow.
+  'github-issue-comment.post',
+  'github-comment-reaction.post',
+  'github-repo-star.post',
+  'github-user-follow.post',
   // Opening a Wellfound recruiter thread. It is the only writer here whose side
   // effect is unmeasured rather than known: a conversation carries a
   // server-side `unread` flag, this is the query the UI fires when a human

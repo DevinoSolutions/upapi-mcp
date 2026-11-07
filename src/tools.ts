@@ -90,8 +90,8 @@ export type McpToolAnnotations = {
  * below: `instagram_check_account.py` and `audio_transcribe.py` (job
  * submission). The other POST-ing workers there — account creation, login,
  * messaging, and any comment poster other than `reddit-oauth-post-comment.post`
- * (which IS published, see PUBLIC_POST_WRITE) — are absent from the catalog, so
- * no tool exists for them on any transport.
+ * and `github-issue-comment.post` (both ARE published, see PUBLIC_POST_WRITE) —
+ * are absent from the catalog, so no tool exists for them on any transport.
  *
  * SINCE 2026-09-07 THE HTTP VERB ALONE NO LONGER SEPARATES THOSE TWO SETS. The
  * Wellfound operations speak persisted GraphQL, so every one of them — reads
@@ -233,7 +233,9 @@ const PUBLIC_POST_WRITE: McpToolAnnotations = {
 
 /**
  * `contra-follow-user.post` and `contra-unfollow-user.post` — set a follow edge on the
- * Contra account the caller's own session speaks as.
+ * Contra account the caller's own session speaks as; `github-repo-star.post`,
+ * `github-user-follow.post` and `github-comment-reaction.post` — set a star, a follow or a
+ * reaction as the GitHub account the caller's own token speaks as.
  *
  * Not read-only: the edge IS the operation, and the followed person is notified.
  * `idempotentHint: true` because following (or unfollowing) a profile you already
@@ -345,8 +347,7 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
   // api.github.com on the worker's own egress: they read issues, repos, users,
   // contributors, comments and commit-author emails and write nothing. The four
   // GitHub WRITE ops that shipped alongside them (comment, reaction, star,
-  // follow) are internal (`publishTargets: []`), so they never reach this union
-  // and are deliberately absent — an MCP host cannot invoke them at all.
+  // follow) went public under D40 and are classified below, under "GitHub writes".
   'github-issue-comments.get': THIRD_PARTY_READ,
   'github-repo-contributors.get': THIRD_PARTY_READ,
   'github-repo-issues.get': THIRD_PARTY_READ,
@@ -358,6 +359,8 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
   'github-trending.get': THIRD_PARTY_READ,
   'github-user-emails.get': THIRD_PARTY_READ,
   'github-user.get': THIRD_PARTY_READ,
+  // Public since D40: one GET /user with the caller's own token, a verdict about that token.
+  'github-account-health.get': THIRD_PARTY_READ,
   'google-autocomplete.post': THIRD_PARTY_READ,
   // The three Maps operations read Google's own Maps endpoints and write nowhere.
   // Idempotent in the sense the hint means — a repeat call is safe and free of
@@ -497,6 +500,19 @@ export const OPERATION_ANNOTATIONS: Readonly<Record<OperationSlug, McpToolAnnota
   'contra-follow-user.post': SOCIAL_EDGE_WRITE,
   'contra-unfollow-user.post': SOCIAL_EDGE_WRITE,
 
+  // ── GitHub writes under the caller's own token (4, public since D40) ──────
+  // Each sends the caller's own GitHub token to api.github.com for one REST call. A comment
+  // is new text a person can read and a retry files a second one, so it takes the
+  // non-idempotent class; a reaction, a star and a follow set an edge that is already set
+  // after the first call (the reaction op reports whether it existed), like Contra's.
+  // Only the comment carries the approve-the-text notice (PUBLIC_WRITE_NOTICE): it is the one
+  // that puts new text under the caller's name. A follow and a reaction do notify a person, but
+  // like Contra's follow they carry the edge annotation and no notice; revisit them together.
+  'github-issue-comment.post': PUBLIC_POST_WRITE,
+  'github-comment-reaction.post': SOCIAL_EDGE_WRITE,
+  'github-repo-star.post': SOCIAL_EDGE_WRITE,
+  'github-user-follow.post': SOCIAL_EDGE_WRITE,
+
   // ── Local pure compute, no network (2) ────────────────────────────────────
   'text-analyze.post': LOCAL_COMPUTE,
   // `email-generate-address.post` builds a persona string in-process (a random
@@ -581,6 +597,8 @@ export function describeTool(
 const PUBLIC_WRITE_NOTICE: Readonly<Record<string, string>> = {
   'reddit-oauth-post-comment.post':
     "Posts publicly as the user's Reddit account. Ask the user to approve the exact text before calling.",
+  'github-issue-comment.post':
+    "Posts publicly as the user's GitHub account. Ask the user to approve the exact text before calling.",
 };
 
 /**
