@@ -41,6 +41,17 @@ const INPUT_FIELDS = {
     ['name'],
   ),
 };
+/** Pinned to PLATFORM_SLUGS in packages/platform-connections by apps/web platform-accounts.test.ts. */
+const PLATFORM_SLUGS = [
+  'tiktok',
+  'instagram',
+  'linkedin',
+  'twitter',
+  'reddit',
+  'facebook',
+  'wellfound',
+  'contra',
+];
 const CONFIRM = {
   confirmToken: s('From the CONFIRMATION_REQUIRED reply.'),
 };
@@ -407,6 +418,48 @@ export const ACCOUNT_TOOL_DEFS: readonly AccountToolDef[] = [
     'Revokes a connected app immediately. Needs a confirmToken.',
     obj({ clientId: s('Client id from list_connections'), ...CONFIRM }, ['clientId']),
     ['action:disconnectAppAction'],
+  ),
+  // platform accounts: a logged-in session (cookies) of a third-party platform, stored per workspace.
+  // NOT the app connections above (`list_connections` / `disconnect` are AI apps linked to upAPI),
+  // and every description says so, because an agent that mixes them up disconnects itself.
+  // The slug list (PLATFORM_SLUGS above) is pinned to PLATFORM_SLUGS (packages/platform-connections) by a test in
+  // apps/web: this package is published and does not depend on that one.
+  def(
+    'connect_platform',
+    'connections',
+    'Connect a platform',
+    'Connects a platform login (cookies), not an AI app connection. Returns a one-time link and steps for the user to log in and hand upAPI their session. Relay the steps; never ask for cookies in chat. Refused for API keys.',
+    obj(
+      {
+        platform: s('Platform', { enum: PLATFORM_SLUGS }),
+        label: s('Optional account name'),
+      },
+      ['platform'],
+    ),
+    ['route:POST /api/connect/[platform]'],
+  ),
+  def(
+    'list_platform_accounts',
+    'connections',
+    'List platform accounts',
+    'Platform logins (cookies) connected to this workspace, not AI apps: platform, account, status, last check. Never returns cookies.',
+    obj({ platform: s('Optional slug') }),
+  ),
+  def(
+    'check_platform_account',
+    'connections',
+    'Check a platform account',
+    'Re-checks a connected platform login and updates its status. Runs one metered operation where a reliable check exists.',
+    obj({ id: s('From list_platform_accounts') }, ['id']),
+    [],
+    true,
+  ),
+  def(
+    'disconnect_platform_account',
+    'connections',
+    'Disconnect a platform account',
+    'Deletes a stored platform login (cookies), not an AI app connection. Needs a confirmToken. Refused for API keys.',
+    obj({ id: s('From list_platform_accounts'), ...CONFIRM }, ['id']),
   ),
   // BYO APIs and proxy
   def(
