@@ -353,7 +353,7 @@ export const ACCOUNT_TOOL_DEFS: readonly AccountToolDef[] = [
     'list_api_keys',
     'read',
     'List API keys',
-    'Keys with name, prefix, scopes, last used.',
+    'Keys with name, prefix, mode (live or test), scopes, last used.',
     obj(),
     ['route:GET /api/keys'],
   ),
@@ -361,8 +361,15 @@ export const ACCOUNT_TOOL_DEFS: readonly AccountToolDef[] = [
     'create_api_key',
     'keys',
     'Create API key',
-    'Ask the user which permissions the key needs; never choose for them. Creates a key and returns the secret once. Omit tiers for all.',
-    obj({ name: s('Key name'), tiers: { type: 'array', items: s('Tier') } }, ['name']),
+    'Ask the user which permissions the key needs; never choose for them. Creates a key and returns the secret once. Omit tiers for all. mode "test" mints a upapi_test_ key that answers every operation with a sample, never spends units and cannot use account tools.',
+    obj(
+      {
+        name: s('Key name'),
+        tiers: { type: 'array', items: s('Tier') },
+        mode: s('live (default) or test', { enum: ['live', 'test'] }),
+      },
+      ['name'],
+    ),
     ['action:createKeyAction', 'action:createOnboardingKey', 'route:POST /api/keys'],
   ),
   def(
