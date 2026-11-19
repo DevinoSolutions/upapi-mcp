@@ -182,9 +182,17 @@ export const ACCOUNT_TOOL_DEFS: readonly AccountToolDef[] = [
     'update_notification_prefs',
     'account',
     'Notification preferences',
-    'Read or change in-app tips and prompts. Omit the field to just read.',
-    obj({ tipsAndPromptsEnabled: b('Show tips and prompts') }),
-    ['route:GET /api/user/preferences', 'route:PATCH /api/user/preferences'],
+    'Read or change in-app tips and prompts and usage-alert emails. Omit both fields to just read.',
+    obj({
+      tipsAndPromptsEnabled: b('Show tips and prompts'),
+      usageAlertEmailsEnabled: b('Email me when a workspace I manage nears or reaches its limit'),
+    }),
+    [
+      'route:GET /api/user/preferences',
+      'route:PATCH /api/user/preferences',
+      'route:GET /api/user/usage-alert-emails',
+      'route:PUT /api/user/usage-alert-emails',
+    ],
     true,
   ),
   def(
