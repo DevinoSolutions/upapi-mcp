@@ -51,6 +51,8 @@ const PLATFORM_SLUGS = [
   'facebook',
   'wellfound',
   'contra',
+  'github',
+  'discord',
 ];
 const CONFIRM = {
   confirmToken: s('From the CONFIRMATION_REQUIRED reply.'),
