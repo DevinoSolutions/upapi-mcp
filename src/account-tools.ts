@@ -58,12 +58,36 @@ const CONFIRM = {
   confirmToken: s('From the CONFIRMATION_REQUIRED reply.'),
 };
 
-function annotationsFor(tier: Tier, idempotent = false): McpToolAnnotations {
+/**
+ * Tools whose permission tier is not `destructive` but whose effect is hard to undo: they end a
+ * subscription, a session, a membership, a key, a connection, or overwrite settings in place. The
+ * tier still decides the scope a client needs; this set only decides the hint clients read.
+ */
+const DESTRUCTIVE_HINT_TOOLS: ReadonlySet<string> = new Set([
+  'manage_subscription',
+  'change_password',
+  'remove_push_token',
+  'delete_account',
+  'update_member_role',
+  'remove_member',
+  'revoke_invite',
+  'revoke_api_key',
+  'disconnect',
+  'disconnect_platform_account',
+  'update_user_api',
+  'set_proxy_config',
+  'update_hosted_function',
+]);
+
+/** Tools that reach outside upAPI: an invite email to a person, a live request through a proxy. */
+const OPEN_WORLD_HINT_TOOLS: ReadonlySet<string> = new Set(['invite_member', 'test_proxy_config']);
+
+function annotationsFor(name: string, tier: Tier, idempotent = false): McpToolAnnotations {
   return {
     readOnlyHint: tier === 'read',
-    destructiveHint: tier === 'destructive',
+    destructiveHint: tier === 'destructive' || DESTRUCTIVE_HINT_TOOLS.has(name),
     idempotentHint: tier === 'read' || idempotent,
-    openWorldHint: false,
+    openWorldHint: OPEN_WORLD_HINT_TOOLS.has(name),
   };
 }
 
@@ -108,7 +132,7 @@ function def(
     title,
     description,
     inputSchema: withWorkspaceArg(name, inputSchema),
-    annotations: annotationsFor(tier, idempotent),
+    annotations: annotationsFor(name, tier, idempotent),
     covers,
   };
 }
